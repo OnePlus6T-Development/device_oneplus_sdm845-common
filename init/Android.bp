@@ -46,6 +46,14 @@ prebuilt_etc {
     vendor: true,
 }
 
+
+prebuilt_etc {
+    name: "init.deviceextras.rc",
+    filename: "init.deviceextras.rc",
+    src: "init.deviceextras.rc",
+    vendor: true,
+}
+
 sh_binary {
     name: "init.class_main.sh",
     src: "init.class_main.sh",
