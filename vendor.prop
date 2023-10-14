@@ -214,6 +214,9 @@ ro.telephony.default_network=22,22
 # Sensors
 persist.vendor.sensors.firmware_property_read_support=false
 
+# Sensors
+persist.vendor.sensors.debug.hal=0
+
 # USB
 sys.usb.mtp.batchcancel=1
 vendor.usb.diag.func.name=diag
