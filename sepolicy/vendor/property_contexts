@@ -1,5 +1,2 @@
-# Power HAL
-vendor.powerhal.             u:object_r:vendor_power_prop:s0
-
 # RIL
 vendor.oem.bt.addr           u:object_r:vendor_rild_prop:s0
