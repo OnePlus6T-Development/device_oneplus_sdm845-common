@@ -201,6 +201,7 @@ ro.telephony.default_network=22,22
 persist.vendor.sensors.firmware_property_read_support=false
 
 # USB
+vendor.usb.controller=a600000.dwc3
 vendor.usb.diag.func.name=diag
 vendor.usb.dpl.inst.name=dpl
 vendor.usb.qdss.inst.name=qdss
@@ -208,7 +209,7 @@ vendor.usb.rmnet.func.name=gsi
 vendor.usb.rmnet.inst.name=rmnet
 vendor.usb.rndis.func.name=gsi
 vendor.usb.use_ffs_mtp=0
-vendor.usb.use_gadget_hal=0
+vendor.usb.use_gadget_hal=1
 
 # Verity
 ro.apk_verity.mode=2
