@@ -347,6 +347,9 @@ PRODUCT_PACKAGES += \
 PRODUCT_BOOT_JARS += \
     oneplus-fwk
 
+# Platform
+TARGET_BOARD_PLATFORM := sdm845
+
 # Power
 PRODUCT_PACKAGES += \
     android.hardware.power-service-qti \
