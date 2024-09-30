@@ -6,3 +6,5 @@ type param_block_device, dev_type;
 type reserve1_block_device, dev_type;
 type reserve2_block_device, dev_type;
 typeattribute system_block_device super_block_device_type;
+type vendor_persist_block_device, dev_type;
+
