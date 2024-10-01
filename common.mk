@@ -290,6 +290,10 @@ PRODUCT_COPY_FILES += \
 PRODUCT_PACKAGES += \
     android.hardware.keymaster@4.1.vendor
 
+# Libshim
+PRODUCT_PACKAGES += \
+    libhidlbase_shim
+
 # Lineage Health
 PRODUCT_PACKAGES += \
     vendor.lineage.health-service.default
