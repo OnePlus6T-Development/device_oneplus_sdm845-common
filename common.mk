@@ -460,3 +460,6 @@ PRODUCT_BOOT_JARS += \
 # OEM Unlock Reporting
 PRODUCT_DEFAULT_PROPERTY_OVERRIDES += \
     ro.oem_unlock_supported=1
+
+# Dynamic Partition
+PRODUCT_USE_DYNAMIC_PARTITIONS := true
