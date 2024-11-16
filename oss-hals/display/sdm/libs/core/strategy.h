@@ -1,5 +1,5 @@
 /*
-* Copyright (c) 2014 - 2020, The Linux Foundation. All rights reserved.
+* Copyright (c) 2014 - 2019, The Linux Foundation. All rights reserved.
 *
 * Redistribution and use in source and binary forms, with or without modification, are permitted
 * provided that the following conditions are met:
@@ -52,12 +52,11 @@ class Strategy {
                            const DisplayConfigVariableInfo &fb_config);
   DisplayError SetCompositionState(LayerComposition composition_type, bool enable);
   DisplayError Purge();
-  DisplayError SetIdleTimeoutMs(uint32_t active_ms, uint32_t inactive_ms);
+  DisplayError SetIdleTimeoutMs(uint32_t active_ms);
   DisplayError SetColorModesInfo(const std::vector<PrimariesTransfer> &colormodes_cs);
   DisplayError SetBlendSpace(const PrimariesTransfer &blend_space);
-  bool CanSkipValidate(bool *needs_buffer_swap);
   void GenerateROI(HWLayersInfo *hw_layers_info, const PUConstraints &pu_constraints);
-  DisplayError SwapBuffers();
+  bool CanSkipValidate();
 
  private:
   void GenerateROI();

@@ -1,5 +1,5 @@
 /*
-* Copyright (c) 2015 - 2018, 2020, The Linux Foundation. All rights reserved.
+* Copyright (c) 2015 - 2018, The Linux Foundation. All rights reserved.
 *
 * Redistribution and use in source and binary forms, with or without modification, are permitted
 * provided that the following conditions are met:
@@ -72,6 +72,7 @@ class ExtensionInterface {
 
   virtual DisplayError CreateResourceExtn(const HWResourceInfo &hw_resource_info,
                                           BufferAllocator *buffer_allocator,
+                                          BufferSyncHandler *buffer_sync_handler,
                                           ResourceInterface **interface) = 0;
   virtual DisplayError DestroyResourceExtn(ResourceInterface *interface) = 0;
   virtual DisplayError CreateDppsControlExtn(DppsControlInterface **dpps_control_interface,

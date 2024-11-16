@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016, 2019 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2016, The Linux Foundation. All rights reserved.
  * Not a Contribution.
  *
  * Copyright 2015 The Android Open Source Project
@@ -38,13 +38,13 @@ class EGLImageBuffer {
   int getWidth();
   int getHeight();
   EGLImageBuffer(android::sp<android::GraphicBuffer>);
-  unsigned int getTexture(int target);
+  unsigned int getTexture();
   unsigned int getFramebuffer();
-  void bindAsTexture(int target);
+  void bindAsTexture();
   void bindAsFramebuffer();
   ~EGLImageBuffer();
   static EGLImageBuffer *from(const private_handle_t *src);
   static void clear();
 };
 
-#endif  //__EGLIMAGE_BUFFER_H_
+#endif  //__EGLIMAGE_BUFFER_H__

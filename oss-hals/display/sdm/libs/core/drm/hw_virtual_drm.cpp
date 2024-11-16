@@ -1,5 +1,5 @@
 /*
-Copyright (c) 2017-2020, The Linux Foundation. All rights reserved.
+Copyright (c) 2017-2019, The Linux Foundation. All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
 modification, are permitted provided that the following conditions are
@@ -51,9 +51,9 @@ using sde_drm::DRMSecureMode;
 
 namespace sdm {
 
-HWVirtualDRM::HWVirtualDRM(int32_t display_id, BufferAllocator *buffer_allocator,
-                           HWInfoInterface *hw_info_intf)
-  : HWDeviceDRM(buffer_allocator, hw_info_intf) {
+HWVirtualDRM::HWVirtualDRM(int32_t display_id, BufferSyncHandler *buffer_sync_handler,
+                           BufferAllocator *buffer_allocator, HWInfoInterface *hw_info_intf)
+  : HWDeviceDRM(buffer_sync_handler, buffer_allocator, hw_info_intf) {
   HWDeviceDRM::device_name_ = "Virtual";
   HWDeviceDRM::disp_type_ = DRMDisplayType::VIRTUAL;
   HWDeviceDRM::display_id_ = display_id;
@@ -87,12 +87,6 @@ void HWVirtualDRM::InitializeConfigs() {
 }
 
 DisplayError HWVirtualDRM::SetWbConfigs(const HWDisplayAttributes &display_attributes) {
-  if (display_attributes.x_pixels > connector_info_.max_linewidth) {
-    DLOGE("Requested width %d is more than supported %d", display_attributes.x_pixels,
-           connector_info_.max_linewidth);
-    return kErrorHardware;
-  }
-
   drmModeModeInfo mode = {};
   vector<drmModeModeInfo> modes;
 
@@ -129,10 +123,6 @@ DisplayError HWVirtualDRM::SetWbConfigs(const HWDisplayAttributes &display_attri
 }
 
 DisplayError HWVirtualDRM::Commit(HWLayers *hw_layers) {
-  if (!hw_layers->info.stack) {
-    return kErrorNone;
-  }
-
   LayerBuffer *output_buffer = hw_layers->info.stack->output_buffer;
   DisplayError err = kErrorNone;
 
@@ -160,6 +150,8 @@ DisplayError HWVirtualDRM::Flush(HWLayers *hw_layers) {
     return err;
   }
 
+  // Close the sync_handle
+  CloseFd(&hw_layers->info.sync_handle);
   return kErrorNone;
 }
 
@@ -234,7 +226,7 @@ void HWVirtualDRM::GetModeIndex(const HWDisplayAttributes &display_attributes, i
   }
 }
 
-DisplayError HWVirtualDRM::PowerOn(const HWQosData &qos_data, shared_ptr<Fence> *release_fence) {
+DisplayError HWVirtualDRM::PowerOn(const HWQosData &qos_data, int *release_fence) {
   DTRACE_SCOPED();
   if (!drm_atomic_intf_) {
     DLOGE("DRM Atomic Interface is null!");

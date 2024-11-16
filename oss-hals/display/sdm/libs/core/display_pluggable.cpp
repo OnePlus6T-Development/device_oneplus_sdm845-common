@@ -1,5 +1,5 @@
 /*
-* Copyright (c) 2014-2020, The Linux Foundation. All rights reserved.
+* Copyright (c) 2014 - 2020, The Linux Foundation. All rights reserved.
 *
 * Redistribution and use in source and binary forms, with or without modification, are permitted
 * provided that the following conditions are met:
@@ -39,21 +39,23 @@ namespace sdm {
 
 DisplayPluggable::DisplayPluggable(DisplayEventHandler *event_handler,
                                    HWInfoInterface *hw_info_intf,
+                                   BufferSyncHandler *buffer_sync_handler,
                                    BufferAllocator *buffer_allocator, CompManager *comp_manager)
-  : DisplayBase(kPluggable, event_handler, kDevicePluggable, buffer_allocator,
+  : DisplayBase(kPluggable, event_handler, kDevicePluggable, buffer_sync_handler, buffer_allocator,
                 comp_manager, hw_info_intf) {}
 
 DisplayPluggable::DisplayPluggable(int32_t display_id, DisplayEventHandler *event_handler,
                                    HWInfoInterface *hw_info_intf,
+                                   BufferSyncHandler *buffer_sync_handler,
                                    BufferAllocator *buffer_allocator, CompManager *comp_manager)
-  : DisplayBase(display_id, kPluggable, event_handler, kDevicePluggable,
+  : DisplayBase(display_id, kPluggable, event_handler, kDevicePluggable, buffer_sync_handler,
                 buffer_allocator, comp_manager, hw_info_intf) {}
 
 DisplayError DisplayPluggable::Init() {
   lock_guard<recursive_mutex> obj(recursive_mutex_);
 
   DisplayError error = HWInterface::Create(display_id_, kPluggable, hw_info_intf_,
-                                           buffer_allocator_, &hw_intf_);
+                                           buffer_sync_handler_, buffer_allocator_, &hw_intf_);
   if (error != kErrorNone) {
     if (kErrorDeviceRemoved == error) {
       DLOGW("Aborted creating hardware interface. Device removed.");
@@ -105,6 +107,17 @@ DisplayError DisplayPluggable::Init() {
   GetScanSupport();
   underscan_supported_ = (scan_support_ == kScanAlwaysUnderscanned) || (scan_support_ == kScanBoth);
 
+  s3d_format_to_mode_.insert(
+      std::pair<LayerBufferS3DFormat, HWS3DMode>(kS3dFormatNone, kS3DModeNone));
+  s3d_format_to_mode_.insert(
+      std::pair<LayerBufferS3DFormat, HWS3DMode>(kS3dFormatLeftRight, kS3DModeLR));
+  s3d_format_to_mode_.insert(
+      std::pair<LayerBufferS3DFormat, HWS3DMode>(kS3dFormatRightLeft, kS3DModeRL));
+  s3d_format_to_mode_.insert(
+      std::pair<LayerBufferS3DFormat, HWS3DMode>(kS3dFormatTopBottom, kS3DModeTB));
+  s3d_format_to_mode_.insert(
+      std::pair<LayerBufferS3DFormat, HWS3DMode>(kS3dFormatFramePacking, kS3DModeFP));
+
   error = HWEventsInterface::Create(display_id_, kPluggable, this, event_list_, hw_intf_,
                                     &hw_events_intf_);
   if (error != kErrorNone) {
@@ -135,6 +148,8 @@ DisplayError DisplayPluggable::Prepare(LayerStack *layer_stack) {
     }
   }
 
+  SetS3DMode(layer_stack);
+
   // Clean hw layers for reuse.
   hw_layers_ = HWLayers();
 
@@ -156,8 +171,7 @@ DisplayError DisplayPluggable::GetRefreshRateRange(uint32_t *min_refresh_rate,
   return error;
 }
 
-DisplayError DisplayPluggable::SetRefreshRate(uint32_t refresh_rate, bool final_rate,
-                                              bool idle_screen) {
+DisplayError DisplayPluggable::SetRefreshRate(uint32_t refresh_rate, bool final_rate) {
   lock_guard<recursive_mutex> obj(recursive_mutex_);
 
   if (!active_) {
@@ -180,6 +194,11 @@ bool DisplayPluggable::IsUnderscanSupported() {
   return underscan_supported_;
 }
 
+DisplayError DisplayPluggable::OnMinHdcpEncryptionLevelChange(uint32_t min_enc_level) {
+  lock_guard<recursive_mutex> obj(recursive_mutex_);
+  return hw_intf_->OnMinHdcpEncryptionLevelChange(min_enc_level);
+}
+
 DisplayError DisplayPluggable::GetOverrideConfig(uint32_t *mode_index) {
   DisplayError error = kErrorNone;
 
@@ -187,6 +206,8 @@ DisplayError DisplayPluggable::GetOverrideConfig(uint32_t *mode_index) {
     DLOGE("Invalid mode index parameter.");
     return kErrorParameters;
   }
+
+  // TODO(user): Need to add support for S3D modes based on HDMI_S3D_MODE_PROP property.
 
   char val[kPropertyMax] = {};
   // Used for changing HDMI Resolution - Override the preferred mode with user set config.
@@ -236,6 +257,46 @@ void DisplayPluggable::GetScanSupport() {
   }
 }
 
+void DisplayPluggable::SetS3DMode(LayerStack *layer_stack) {
+  uint32_t s3d_layer_count = 0;
+  HWS3DMode s3d_mode = kS3DModeNone;
+  uint32_t layer_count = UINT32(layer_stack->layers.size());
+
+  // S3D mode is supported for the following scenarios:
+  // 1. Layer stack containing only one s3d layer which is not skip
+  // 2. Layer stack containing only one secure layer along with one s3d layer
+  for (uint32_t i = 0; i < layer_count; i++) {
+    Layer *layer = layer_stack->layers.at(i);
+    LayerBuffer &layer_buffer = layer->input_buffer;
+
+    if (layer_buffer.s3d_format != kS3dFormatNone) {
+      s3d_layer_count++;
+      if (s3d_layer_count > 1 || layer->flags.skip) {
+        s3d_mode = kS3DModeNone;
+        break;
+      }
+
+      std::map<LayerBufferS3DFormat, HWS3DMode>::iterator it =
+          s3d_format_to_mode_.find(layer_buffer.s3d_format);
+      if (it != s3d_format_to_mode_.end()) {
+        s3d_mode = it->second;
+      }
+    } else if (layer_buffer.flags.secure && layer_count > 2) {
+      s3d_mode = kS3DModeNone;
+      break;
+    }
+  }
+
+  if (hw_intf_->SetS3DMode(s3d_mode) != kErrorNone) {
+    hw_intf_->SetS3DMode(kS3DModeNone);
+    layer_stack->flags.s3d_mode_present = false;
+  } else if (s3d_mode != kS3DModeNone) {
+    layer_stack->flags.s3d_mode_present = true;
+  }
+
+  DisplayBase::ReconfigureDisplay();
+}
+
 void DisplayPluggable::CECMessage(char *message) {
   event_handler_->CECMessage(message);
 }
@@ -244,8 +305,6 @@ void DisplayPluggable::CECMessage(char *message) {
 void DisplayPluggable::HwRecovery(const HWRecoveryEvent sdm_event_code) {
   DisplayBase::HwRecovery(sdm_event_code);
 }
-
-void DisplayPluggable::Histogram(int /* histogram_fd */, uint32_t /* blob_id */) {}
 
 DisplayError DisplayPluggable::VSync(int64_t timestamp) {
   if (vsync_enable_) {
@@ -259,30 +318,32 @@ DisplayError DisplayPluggable::VSync(int64_t timestamp) {
 
 DisplayError DisplayPluggable::InitializeColorModes() {
   PrimariesTransfer pt = {};
-  AttrVal var = {};
-  if (!hw_panel_info_.hdr_enabled && !hw_panel_info_.supported_colorspaces) {
+  AttrVal var;
+  if (!hw_panel_info_.hdr_enabled) {
     return kErrorNone;
   } else {
-    if (hw_panel_info_.supported_colorspaces) {
-      InitializeColorModesFromColorspace();
-    }
     color_modes_cs_.push_back(pt);
     var.push_back(std::make_pair(kColorGamutAttribute, kSrgb));
     var.push_back(std::make_pair(kDynamicRangeAttribute, kSdr));
     var.push_back(std::make_pair(kPictureQualityAttribute, kStandard));
-    var.push_back(std::make_pair(kRenderIntentAttribute, "0"));
     color_mode_attr_map_.insert(std::make_pair(kSrgb, var));
 
     // native mode
     color_modes_cs_.push_back(pt);
     var.clear();
     color_mode_attr_map_.insert(std::make_pair("hal_native", var));
+
+    pt.primaries = ColorPrimaries_BT2020;
+    pt.transfer = Transfer_Gamma2_2;
+    color_modes_cs_.push_back(pt);
+    var.clear();
+    var.push_back(std::make_pair(kColorGamutAttribute, kBt2020));
+    var.push_back(std::make_pair(kGammaTransferAttribute, kGamma2_2));
+    color_mode_attr_map_.insert(std::make_pair(kBt2020, var));
   }
 
   var.clear();
   var.push_back(std::make_pair(kColorGamutAttribute, kBt2020));
-  var.push_back(std::make_pair(kPictureQualityAttribute, kStandard));
-  var.push_back(std::make_pair(kRenderIntentAttribute, "0"));
   if (hw_panel_info_.hdr_eotf & kHdrEOTFHDR10) {
     pt.transfer = Transfer_SMPTE_ST2084;
     var.push_back(std::make_pair(kGammaTransferAttribute, kSt2084));
@@ -302,33 +363,6 @@ DisplayError DisplayPluggable::InitializeColorModes() {
   return kErrorNone;
 }
 
-void DisplayPluggable::InitializeColorModesFromColorspace() {
-  PrimariesTransfer pt = {};
-  AttrVal var = {};
-  if (hw_panel_info_.supported_colorspaces & kColorspaceDcip3) {
-    pt.primaries = ColorPrimaries_DCIP3;
-    pt.transfer = Transfer_sRGB;
-    var.clear();
-    var.push_back(std::make_pair(kColorGamutAttribute, kDcip3));
-    var.push_back(std::make_pair(kGammaTransferAttribute, kSrgb));
-    var.push_back(std::make_pair(kPictureQualityAttribute, kStandard));
-    var.push_back(std::make_pair(kRenderIntentAttribute, "0"));
-    color_modes_cs_.push_back(pt);
-    color_mode_attr_map_.insert(std::make_pair(kDisplayP3, var));
-  }
-  if (hw_panel_info_.supported_colorspaces & kColorspaceBt2020rgb) {
-    pt.primaries = ColorPrimaries_BT2020;
-    pt.transfer = Transfer_sRGB;
-    var.clear();
-    var.push_back(std::make_pair(kColorGamutAttribute, kBt2020));
-    var.push_back(std::make_pair(kGammaTransferAttribute, kSrgb));
-    var.push_back(std::make_pair(kPictureQualityAttribute, kStandard));
-    var.push_back(std::make_pair(kRenderIntentAttribute, "0"));
-    color_modes_cs_.push_back(pt);
-    color_mode_attr_map_.insert(std::make_pair(kDisplayBt2020, var));
-  }
-}
-
 static PrimariesTransfer GetBlendSpaceFromAttributes(const std::string &color_gamut,
                                                      const std::string &transfer) {
   PrimariesTransfer blend_space_ = {};
@@ -341,9 +375,6 @@ static PrimariesTransfer GetBlendSpaceFromAttributes(const std::string &color_ga
     } else if (transfer == kGamma2_2) {
       blend_space_.transfer = Transfer_Gamma2_2;
     }
-  } else if (color_gamut == kDcip3) {
-    blend_space_.primaries = ColorPrimaries_DCIP3;
-    blend_space_.transfer = Transfer_sRGB;
   } else if (color_gamut == kSrgb) {
     blend_space_.primaries = ColorPrimaries_BT709_5;
     blend_space_.transfer = Transfer_sRGB;
@@ -359,7 +390,7 @@ static PrimariesTransfer GetBlendSpaceFromAttributes(const std::string &color_ga
 DisplayError DisplayPluggable::SetColorMode(const std::string &color_mode) {
   auto current_color_attr_ = color_mode_attr_map_.find(color_mode);
   if (current_color_attr_ == color_mode_attr_map_.end()) {
-    DLOGW("Failed to get the color mode = %s", color_mode.c_str());
+    DLOGE("Failed to get the color mode = %s", color_mode.c_str());
     return kErrorNone;
   }
   AttrVal attr = current_color_attr_->second;
@@ -376,17 +407,11 @@ DisplayError DisplayPluggable::SetColorMode(const std::string &color_mode) {
   }
 
   DisplayError error = kErrorNone;
-  PrimariesTransfer blend_space = GetBlendSpaceFromAttributes(color_gamut, transfer);
-  error = comp_manager_->SetBlendSpace(display_comp_ctx_, blend_space);
+  error = comp_manager_->SetBlendSpace(display_comp_ctx_,
+                                       GetBlendSpaceFromAttributes(color_gamut, transfer));
   if (error != kErrorNone) {
-    DLOGW("Failed Set blend space, error = %d display_type_ = %d", error, display_type_);
+    DLOGE("Failed Set blend space, error = %d display_type_=%d", error, display_type_);
   }
-
-  error = hw_intf_->SetBlendSpace(blend_space);
-  if (error != kErrorNone) {
-    DLOGW("Failed to pass blend space, error = %d display_type_ = %d", error, display_type_);
-  }
-
   current_color_mode_ = color_mode;
 
   return kErrorNone;
@@ -448,14 +473,6 @@ void DisplayPluggable::UpdateColorModes() {
     DLOGI("Color mode = %s", color_modes_[i].name);
   }
   return;
-}
-
-DisplayError DisplayPluggable::colorSamplingOn() {
-    return kErrorNone;
-}
-
-DisplayError DisplayPluggable::colorSamplingOff() {
-    return kErrorNone;
 }
 
 }  // namespace sdm

@@ -1,5 +1,5 @@
 /*
-* Copyright (c) 2016-2020, The Linux Foundation. All rights reserved.
+* Copyright (c) 2016-2017, The Linux Foundation. All rights reserved.
 *
 * Redistribution and use in source and binary forms, with or without
 * modification, are permitted provided that the following conditions are
@@ -83,10 +83,6 @@ void HWScaleDRM::SetScalerV2(const HWScaleData &scale_data, sde_drm_scaler_v2 *s
 
   scaler->enable = scale_data.enable.scale | scale_data.enable.direction_detection |
                    scale_data.detail_enhance.enable;
-#ifdef SDE_DRM_QSEED4
-  scaler->flags = (scale_data.enable.dyn_exp_disable ? SDE_DYN_EXP_DISABLE : 0);
-  scaler->de_blend = scale_data.detail_enhance.de_blend;
-#endif
 
   scaler->dir_en = scale_data.enable.direction_detection;
   scaler->de.enable = scale_data.detail_enhance.enable;
@@ -160,13 +156,6 @@ void HWScaleDRM::SetScalerV2(const HWScaleData &scale_data, sde_drm_scaler_v2 *s
       det_enhance->adjust_c[i] = scale_data.detail_enhance.adjust_c[i];
     }
   }
-
-#ifdef SDE_DRM_INLINE_PREDOWNSCALE
-  scaler->pre_downscale_x_0 = scale_data.src_x_pre_down_scale_0;
-  scaler->pre_downscale_x_1 = scale_data.src_x_pre_down_scale_1;
-  scaler->pre_downscale_y_0 = scale_data.src_y_pre_down_scale_0;
-  scaler->pre_downscale_y_1 = scale_data.src_y_pre_down_scale_1;
-#endif
 
   return;
 }

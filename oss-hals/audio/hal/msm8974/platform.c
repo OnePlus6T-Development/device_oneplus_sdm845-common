@@ -522,7 +522,7 @@ static int pcm_device_table[AUDIO_USECASE_MAX][2] = {
 };
 
 /* Array to store sound devices */
-static const char * device_table[SND_DEVICE_MAX] = {
+static const char * const device_table[SND_DEVICE_MAX] = {
     [SND_DEVICE_NONE] = "none",
     /* Playback sound devices */
     [SND_DEVICE_OUT_HANDSET] = "handset",
@@ -11140,9 +11140,9 @@ int platform_set_channel_map(void *platform, int ch_count, char *ch_map, int snd
     if (be_idx >= 0) {
         be_set_values[0] = be_idx;
         memcpy(&be_set_values[1], set_values, sizeof(long) * ch_count);
-        ret = mixer_ctl_set_array(ctl, be_set_values, ARRAY_SIZE(be_set_values));
+        ret = mixer_ctl_set_array(ctl, be_set_values, n);
     } else {
-        ret = mixer_ctl_set_array(ctl, set_values, ARRAY_SIZE(set_values));
+        ret = mixer_ctl_set_array(ctl, set_values, n);
     }
 
     if (ret < 0) {
@@ -11756,21 +11756,6 @@ int platform_set_audio_device_interface(const char *device_name, const char *int
 
     ret = -EINVAL;
 
-done:
-    return ret;
-}
-
-int platform_set_snd_device_name(snd_device_t device, const char *name)
-{
-    int ret = 0;
-
-    if ((device < SND_DEVICE_MIN) || (device >= SND_DEVICE_MAX)) {
-        ALOGE("%s:: Invalid snd_device = %d", __func__, device);
-        ret = -EINVAL;
-        goto done;
-    }
-
-    device_table[device] = strdup(name);
 done:
     return ret;
 }

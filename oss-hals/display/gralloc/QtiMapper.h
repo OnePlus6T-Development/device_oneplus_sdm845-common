@@ -112,12 +112,12 @@ class QtiMapper : public IQtiMapper {
     if (in.size() != gralloc::kBufferDescriptorSize || in[0] != gralloc::kMagicVersion) {
       return gralloc::Error::BAD_DESCRIPTOR;
     }
-    uint32_t width = static_cast<int32_t>(in[1]);
-    uint32_t height = static_cast<int32_t>(in[2]);
+    int32_t width = static_cast<int32_t>(in[1]);
+    int32_t height = static_cast<int32_t>(in[2]);
     buf_descriptor->SetDimensions(width, height);
     uint32_t layer_count = in[3];
     buf_descriptor->SetLayerCount(layer_count);
-    uint32_t format = static_cast<int32_t>(in[4]);
+    int32_t format = static_cast<int32_t>(in[4]);
     buf_descriptor->SetColorFormat(format);
     uint64_t usage = static_cast<uint64_t>(in[6]) << 32 | in[5];
     buf_descriptor->SetUsage(usage);

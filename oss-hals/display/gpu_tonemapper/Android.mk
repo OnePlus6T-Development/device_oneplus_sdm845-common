@@ -3,13 +3,11 @@ include $(LOCAL_PATH)/../common.mk
 
 include $(CLEAR_VARS)
 LOCAL_MODULE              := libgpu_tonemapper
-LOCAL_SANITIZE            := integer_overflow
 LOCAL_VENDOR_MODULE       := true
 LOCAL_MODULE_TAGS         := optional
 LOCAL_HEADER_LIBRARIES    := display_headers
 LOCAL_C_INCLUDES          += $(TARGET_OUT_INTERMEDIATES)/KERNEL_OBJ/usr/include
-LOCAL_SHARED_LIBRARIES    := libEGL libGLESv2 libGLESv3 libui libutils liblog \
-                             libqdMetaData libgrallocutils
+LOCAL_SHARED_LIBRARIES    := libEGL libGLESv2 libGLESv3 libui libutils liblog
 LOCAL_ADDITIONAL_DEPENDENCIES := $(TARGET_OUT_INTERMEDIATES)/KERNEL_OBJ/usr
 
 LOCAL_CFLAGS              := $(version_flag) -Wno-missing-field-initializers -Wall \

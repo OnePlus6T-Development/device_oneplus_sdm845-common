@@ -1,5 +1,5 @@
 /*
-* Copyright (c) 2014-2021, The Linux Foundation. All rights reserved.
+* Copyright (c) 2014 - 2020, The Linux Foundation. All rights reserved.
 *
 * Redistribution and use in source and binary forms, with or without modification, are permitted
 * provided that the following conditions are met:
@@ -20,42 +20,6 @@
 * OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT,
 * STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-*/
-
-/*
-* Changes from Qualcomm Innovation Center are provided under the following license:
-*
-* Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
-*
-* Redistribution and use in source and binary forms, with or without
-* modification, are permitted (subject to the limitations in the
-* disclaimer below) provided that the following conditions are met:
-*
-*    * Redistributions of source code must retain the above copyright
-*      notice, this list of conditions and the following disclaimer.
-*
-*    * Redistributions in binary form must reproduce the above
-*      copyright notice, this list of conditions and the following
-*      disclaimer in the documentation and/or other materials provided
-*      with the distribution.
-*
-*    * Neither the name of Qualcomm Innovation Center, Inc. nor the names of its
-*      contributors may be used to endorse or promote products derived
-*      from this software without specific prior written permission.
-*
-* NO EXPRESS OR IMPLIED LICENSES TO ANY PARTY'S PATENT RIGHTS ARE
-* GRANTED BY THIS LICENSE. THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT
-* HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED
-* WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF
-* MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED.
-* IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR
-* ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
-* DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE
-* GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-* INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER
-* IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR
-* OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
-* IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
 #include <stdio.h>
@@ -101,20 +65,23 @@ static ColorPrimaries GetColorPrimariesFromAttribute(const std::string &gamut) {
 
 // TODO(user): Have a single structure handle carries all the interface pointers and variables.
 DisplayBase::DisplayBase(DisplayType display_type, DisplayEventHandler *event_handler,
-                         HWDeviceType hw_device_type, BufferAllocator *buffer_allocator,
-                         CompManager *comp_manager, HWInfoInterface *hw_info_intf)
+                         HWDeviceType hw_device_type, BufferSyncHandler *buffer_sync_handler,
+                         BufferAllocator *buffer_allocator, CompManager *comp_manager,
+                         HWInfoInterface *hw_info_intf)
   : display_type_(display_type), event_handler_(event_handler), hw_device_type_(hw_device_type),
-    buffer_allocator_(buffer_allocator), comp_manager_(comp_manager), hw_info_intf_(hw_info_intf) {
+    buffer_sync_handler_(buffer_sync_handler), buffer_allocator_(buffer_allocator),
+    comp_manager_(comp_manager), hw_info_intf_(hw_info_intf) {
 }
 
 DisplayBase::DisplayBase(int32_t display_id, DisplayType display_type,
                          DisplayEventHandler *event_handler, HWDeviceType hw_device_type,
-                         BufferAllocator *buffer_allocator, CompManager *comp_manager,
-                         HWInfoInterface *hw_info_intf)
+                         BufferSyncHandler *buffer_sync_handler, BufferAllocator *buffer_allocator,
+                         CompManager *comp_manager, HWInfoInterface *hw_info_intf)
   : display_id_(display_id),
     display_type_(display_type),
     event_handler_(event_handler),
     hw_device_type_(hw_device_type),
+    buffer_sync_handler_(buffer_sync_handler),
     buffer_allocator_(buffer_allocator),
     comp_manager_(comp_manager),
     hw_info_intf_(hw_info_intf) {}
@@ -138,9 +105,8 @@ DisplayError DisplayBase::Init() {
 
   error = Debug::GetMixerResolution(&mixer_attributes_.width, &mixer_attributes_.height);
   if (error == kErrorNone) {
-    if (hw_intf_->SetMixerAttributes(mixer_attributes_) == kErrorNone) {
-      custom_mixer_resolution_ = true;
-    }
+    hw_intf_->SetMixerAttributes(mixer_attributes_);
+    custom_mixer_resolution_ = true;
   }
 
   error = hw_intf_->GetMixerAttributes(&mixer_attributes_);
@@ -165,10 +131,8 @@ DisplayError DisplayBase::Init() {
 
   // ColorManager supported for built-in display.
   if (kBuiltIn == display_type_) {
-    DppsControlInterface *dpps_intf = comp_manager_->GetDppsControlIntf();
     color_mgr_ = ColorManagerProxy::CreateColorManagerProxy(display_type_, hw_intf_,
-                                                            display_attributes_, hw_panel_info_,
-                                                            dpps_intf);
+                                                            display_attributes_, hw_panel_info_);
 
     if (color_mgr_) {
       if (InitializeColorModes() != kErrorNone) {
@@ -182,12 +146,11 @@ DisplayError DisplayBase::Init() {
 
   error = comp_manager_->RegisterDisplay(display_id_, display_type_, display_attributes_,
                                          hw_panel_info_, mixer_attributes_, fb_config_,
-                                         &display_comp_ctx_, &(default_clock_hz_));
+                                         &display_comp_ctx_, &(default_qos_data_.clock_hz));
   if (error != kErrorNone) {
     DLOGW("Display %d comp manager registration failed!", display_id_);
     goto CleanupOnError;
   }
-  cached_qos_data_.clock_hz = default_clock_hz_;
 
   if (color_modes_cs_.size() > 0) {
     error = comp_manager_->SetColorModesInfo(display_comp_ctx_, color_modes_cs_);
@@ -201,6 +164,7 @@ DisplayError DisplayBase::Init() {
   }
   DisplayBase::SetMaxMixerStages(max_mixer_stages);
 
+  Debug::GetProperty(DISABLE_HDR_LUT_GEN, &disable_hdr_lut_gen_);
   // TODO(user): Temporary changes, to be removed when DRM driver supports
   // Partial update with Destination scaler enabled.
   SetPUonDestScaler();
@@ -233,39 +197,6 @@ DisplayError DisplayBase::Deinit() {
   }
   HWEventsInterface::Destroy(hw_events_intf_);
   HWInterface::Destroy(hw_intf_);
-  if (rc_panel_feature_init_) {
-    rc_core_->Deinit();
-    rc_panel_feature_init_ =  false;
-  }
-  return kErrorNone;
-}
-
-// Query the dspp capabilities and enable the RC feature.
-DisplayError DisplayBase::SetupRC() {
-  RCInputConfig input_cfg = {};
-  input_cfg.display_id = display_id_;
-  input_cfg.display_type = display_type_;
-  input_cfg.display_xres = display_attributes_.x_pixels;
-  input_cfg.display_yres = display_attributes_.y_pixels;
-  input_cfg.max_mem_size = hw_resource_info_.rc_total_mem_size;
-  rc_core_ = pf_factory_->CreateRCIntf(input_cfg, prop_intf_);
-  GenericPayload dummy;
-  int err = 0;
-  if (!rc_core_) {
-    DLOGE("Failed to create RC Intf");
-    return kErrorUndefined;
-  }
-  err = rc_core_->GetParameter(kRCFeatureQueryDspp, &dummy);
-  if (!err) {
-    // Since the query succeeded, this display has a DSPP.
-    if (rc_core_->Init() != 0) {
-      DLOGW("Failed to initialize RC");
-      return kErrorNotSupported;
-    }
-  } else {
-    DLOGW("RC HW block is not present for display %d-%d.", display_id_, display_type_);
-    return kErrorResources;
-  }
 
   return kErrorNone;
 }
@@ -283,27 +214,19 @@ DisplayError DisplayBase::BuildLayerStackStats(LayerStack *layer_stack) {
     }
     if (layer->composition == kCompositionGPUTarget) {
       hw_layers_info.gpu_target_index = hw_layers_info.app_layer_count;
-    } else if (layer->composition == kCompositionStitchTarget) {
-      hw_layers_info.stitch_target_index = hw_layers_info.gpu_target_index + 1;
       break;
-    } else {
-      hw_layers_info.app_layer_count++;
     }
+    hw_layers_info.app_layer_count++;
     if (IsWideColor(layer->input_buffer.color_metadata.colorPrimaries)) {
       hw_layers_info.wide_color_primaries.push_back(
           layer->input_buffer.color_metadata.colorPrimaries);
     }
-    if (layer->flags.is_game) {
-      hw_layers_info.game_present = true;
-    }
   }
 
-  hw_layers_info.stitch_target_index = hw_layers_info.gpu_target_index + 1;
-  DLOGD_IF(kTagDisplay, "LayerStack layer_count: %zu, app_layer_count: %d, "
-                        "gpu_target_index: %d, stitch_index: %d game_present: %d, display: %d-%d",
-                        layers.size(), hw_layers_info.app_layer_count,
-                        hw_layers_info.gpu_target_index, hw_layers_info.stitch_target_index,
-                        hw_layers_info.game_present, display_id_, display_type_);
+  DLOGD_IF(kTagDisplay,
+           "LayerStack layer_count: %d, app_layer_count: %d, gpu_target_index: %d, display: %d-%d",
+           layers.size(), hw_layers_info.app_layer_count, hw_layers_info.gpu_target_index,
+           display_id_, display_type_);
 
   if (!hw_layers_info.app_layer_count) {
     DLOGW("Layer count is zero");
@@ -377,19 +300,6 @@ DisplayError DisplayBase::Prepare(LayerStack *layer_stack) {
     return error;
   }
 
-  if (!rc_core_ && !first_cycle_ && rc_enable_prop_ && pf_factory_ && prop_intf_) {
-    error = SetupRC();
-    if (error == kErrorNone) {
-      rc_panel_feature_init_ = true;
-    } else {
-      DLOGW("RC feature not supported");
-    }
-  }
-  if (rc_panel_feature_init_) {
-    SetRCData(layer_stack);
-  }
-
-
   if (color_mgr_ && color_mgr_->NeedsPartialUpdateDisable()) {
     DisablePartialUpdateOneFrame();
   }
@@ -403,7 +313,6 @@ DisplayError DisplayBase::Prepare(LayerStack *layer_stack) {
 
   hw_layers_.updates_mask.set(kUpdateResources);
   comp_manager_->GenerateROI(display_comp_ctx_, &hw_layers_);
-
   comp_manager_->PrePrepare(display_comp_ctx_, &hw_layers_);
 
   while (true) {
@@ -431,123 +340,15 @@ DisplayError DisplayBase::Prepare(LayerStack *layer_stack) {
     }
   }
 
-  if (color_mgr_)
-    color_mgr_->Validate(&hw_layers_);
-
   comp_manager_->PostPrepare(display_comp_ctx_, &hw_layers_);
 
   DLOGI_IF(kTagDisplay, "Exiting Prepare for display type : %d error: %d", display_type_, error);
   return error;
 }
 
-// Send layer stack to RC core to generate and configure the mask on HW.
-void DisplayBase::SetRCData(LayerStack *layer_stack) {
-  int ret = -1;
-  HWLayersInfo &hw_layers_info = hw_layers_.info;
-  DLOGI_IF(kTagDisplay, "Display resolution: %dx%d", display_attributes_.x_pixels,
-           display_attributes_.y_pixels);
-  if (rc_cached_res_width_ != display_attributes_.x_pixels) {
-    GenericPayload in;
-    uint32_t *display_xres = nullptr;
-    ret = in.CreatePayload<uint32_t>(display_xres);
-    if (ret) {
-      DLOGE("failed to create the payload. Error:%d", ret);
-      return;
-    }
-    *display_xres = rc_cached_res_width_ = display_attributes_.x_pixels;
-    ret = rc_core_->SetParameter(kRCFeatureDisplayXRes, in);
-    if (ret) {
-      DLOGE("failed to set display X resolution. Error:%d", ret);
-      return;
-    }
-  }
-
-  if (rc_cached_res_height_ != display_attributes_.y_pixels) {
-    GenericPayload in;
-    uint32_t *display_yres = nullptr;
-    ret = in.CreatePayload<uint32_t>(display_yres);
-    if (ret) {
-      DLOGE("failed to create the payload. Error:%d", ret);
-      return;
-    }
-    *display_yres = rc_cached_res_height_ = display_attributes_.y_pixels;
-    ret = rc_core_->SetParameter(kRCFeatureDisplayYRes, in);
-    if (ret) {
-      DLOGE("failed to set display Y resolution. Error:%d", ret);
-      return;
-    }
-  }
-
-  GenericPayload in;
-  LayerStack **layer_stack_ptr = nullptr;
-  ret = in.CreatePayload<LayerStack *>(layer_stack_ptr);
-  if (ret) {
-    DLOGE("failed to create the payload. Error:%d", ret);
-    return;
-  }
-  *layer_stack_ptr = layer_stack;
-  GenericPayload out;
-  RCOutputConfig *rc_out_config = nullptr;
-  ret = out.CreatePayload<RCOutputConfig>(rc_out_config);
-  if (ret) {
-    DLOGE("failed to create the payload. Error:%d", ret);
-    return;
-  }
-  ret = rc_core_->ProcessOps(kRCFeaturePrepare, in, &out);
-  if (!ret) {
-    DLOGD_IF(kTagDisplay, "RC top_height = %d, RC bot_height = %d", rc_out_config->top_height,
-             rc_out_config->bottom_height);
-    if (rc_out_config->rc_needs_full_roi) {
-      DisablePartialUpdateOneFrame();
-    }
-    hw_layers_info.rc_config = true;
-    hw_layers_info.rc_layers_info.top_width = rc_out_config->top_width;
-    hw_layers_info.rc_layers_info.top_height = rc_out_config->top_height;
-    hw_layers_info.rc_layers_info.bottom_width = rc_out_config->bottom_width;
-    hw_layers_info.rc_layers_info.bottom_height = rc_out_config->bottom_height;
-  }
-}
-
 DisplayError DisplayBase::Commit(LayerStack *layer_stack) {
   lock_guard<recursive_mutex> obj(recursive_mutex_);
   DisplayError error = kErrorNone;
-
-  if (rc_panel_feature_init_) {
-    GenericPayload in, out;
-    RCMaskCfgState *mask_status = nullptr;
-    int ret = -1;
-    ret = out.CreatePayload<RCMaskCfgState>(mask_status);
-    if (ret) {
-      DLOGE("failed to create the payload. Error:%d", ret);
-      return kErrorUndefined;
-    }
-    ret = rc_core_->ProcessOps(kRCFeatureCommit, in, &out);
-    if (ret) {
-     // If RC commit failed, fall back to default (GPU/SDE pipes) drawing of "handled" mask layers.
-     DLOGW("Failed to set the data on driver for display: %d-%d, Error: %d, status: %d",
-           display_id_, display_type_, ret, (*mask_status).rc_mask_state);
-      if ((*mask_status).rc_mask_state == kStatusRcMaskStackHandled) {
-        needs_validate_ = true;
-        DLOGW("Need to call Corresponding prepare to handle the mask layers %d %d.",
-              display_id_, display_type_);
-        for (auto &layer : layer_stack->layers) {
-          if (layer->input_buffer.flags.mask_layer) {
-            layer->request.flags.rc = false;
-          }
-        }
-        return kErrorNotValidated;
-      }
-    } else {
-      DLOGI_IF(kTagDisplay, "Status of RC mask data: %d.", (*mask_status).rc_mask_state);
-      if ((*mask_status).rc_mask_state == kStatusRcMaskStackDirty) {
-        DisablePartialUpdateOneFrame();
-        needs_validate_ = true;
-        DLOGI_IF(kTagDisplay, "Mask is ready for display %d-%d, call Corresponding Prepare()",
-                 display_id_, display_type_);
-        return kErrorNotValidated;
-      }
-    }
-  }
 
   // Allow commit as pending doze/pending_power_on is handled as a part of draw cycle
   if (!active_ && !pending_doze_ && !pending_power_on_) {
@@ -563,6 +364,19 @@ DisplayError DisplayBase::Commit(LayerStack *layer_stack) {
     DLOGE("Commit: Corresponding Prepare() is not called for display %d-%d", display_id_,
           display_type_);
     return kErrorNotValidated;
+  }
+
+  // Layer stack attributes has changed, need to Reconfigure, currently in use for Hybrid Comp
+  if (layer_stack->flags.attributes_changed) {
+    error = comp_manager_->ReConfigure(display_comp_ctx_, &hw_layers_);
+    if (error != kErrorNone) {
+      return error;
+    }
+
+    error = hw_intf_->Validate(&hw_layers_);
+    if (error != kErrorNone) {
+        return error;
+    }
   }
 
   DLOGI_IF(kTagDisplay, "Entering commit for display: %d-%d", display_id_, display_type_);
@@ -587,12 +401,14 @@ DisplayError DisplayBase::Commit(LayerStack *layer_stack) {
       // If COMMIT fails on the Fast Path, set Safe Mode.
       DLOGE("COMMIT failed in Fast Path, set Safe Mode!");
       comp_manager_->SetSafeMode(true);
+      safe_mode_in_fast_path_ = true;
       error = kErrorNotValidated;
     }
     return error;
   }
 
   PostCommitLayerParams(layer_stack);
+  SetLutSwapFlag();
 
   if (partial_update_control_) {
     comp_manager_->ControlPartialUpdate(display_comp_ctx_, true /* enable */);
@@ -606,19 +422,23 @@ DisplayError DisplayBase::Commit(LayerStack *layer_stack) {
   // Stop dropping vsync when first commit is received after idle fallback.
   drop_hw_vsync_ = false;
 
+  if (safe_mode_in_fast_path_) {
+    comp_manager_->SetSafeMode(false);
+    safe_mode_in_fast_path_ = false;
+  }
+
   // Reset pending power state if any after the commit
-  error = HandlePendingPowerState(layer_stack->retire_fence);
+  error = HandlePendingPowerState(layer_stack->retire_fence_fd);
   if (error != kErrorNone) {
     return error;
   }
 
   // Handle pending vsync enable if any after the commit
-  error = HandlePendingVSyncEnable(layer_stack->retire_fence);
+  error = HandlePendingVSyncEnable(layer_stack->retire_fence_fd);
   if (error != kErrorNone) {
     return error;
   }
 
-  comp_manager_->SetSafeMode(false);
 
   DLOGI_IF(kTagDisplay, "Exiting commit for display: %d-%d", display_id_, display_type_);
 
@@ -682,20 +502,13 @@ DisplayError DisplayBase::GetConfig(DisplayConfigFixedInfo *fixed_info) {
   HWResourceInfo hw_resource_info = HWResourceInfo();
   hw_info_intf_->GetHWResourceInfo(&hw_resource_info);
   bool hdr_supported = hw_resource_info.has_hdr;
-  bool hdr_plus_supported = false;
   HWDisplayInterfaceInfo hw_disp_info = {};
   hw_info_intf_->GetFirstDisplayInterfaceType(&hw_disp_info);
   if (hw_disp_info.type == kHDMI) {
     hdr_supported = (hdr_supported && hw_panel_info_.hdr_enabled);
   }
 
-  // For non-builtin displays, check panel capability for HDR10+
-  if (hdr_supported && hw_panel_info_.hdr_plus_enabled) {
-    hdr_plus_supported = true;
-  }
-
   fixed_info->hdr_supported = hdr_supported;
-  fixed_info->hdr_plus_supported = hdr_plus_supported;
   // Populate luminance values only if hdr will be supported on that display
   fixed_info->max_luminance = fixed_info->hdr_supported ? hw_panel_info_.peak_luminance: 0;
   fixed_info->average_luminance = fixed_info->hdr_supported ? hw_panel_info_.average_luminance : 0;
@@ -703,7 +516,6 @@ DisplayError DisplayBase::GetConfig(DisplayConfigFixedInfo *fixed_info) {
   fixed_info->hdr_eotf = hw_panel_info_.hdr_eotf;
   fixed_info->hdr_metadata_type_one = hw_panel_info_.hdr_metadata_type_one;
   fixed_info->partial_update = hw_panel_info_.partial_update;
-  fixed_info->readback_supported = hw_resource_info.has_concurrent_writeback;
 
   return kErrorNone;
 }
@@ -725,7 +537,7 @@ DisplayError DisplayBase::GetVSyncState(bool *enabled) {
 }
 
 DisplayError DisplayBase::SetDisplayState(DisplayState state, bool teardown,
-                                          shared_ptr<Fence> *release_fence) {
+                                          int *release_fence) {
   lock_guard<recursive_mutex> obj(recursive_mutex_);
   DisplayError error = kErrorNone;
   bool active = false;
@@ -753,12 +565,10 @@ DisplayError DisplayBase::SetDisplayState(DisplayState state, bool teardown,
     if (error == kErrorNone) {
       error = hw_intf_->PowerOff(teardown);
     }
-    cached_qos_data_ = {};
-    cached_qos_data_.clock_hz = default_clock_hz_;
     break;
 
   case kStateOn:
-    error = hw_intf_->PowerOn(cached_qos_data_, release_fence);
+    error = hw_intf_->PowerOn(default_qos_data_, release_fence);
     if (error != kErrorNone) {
       if (error == kErrorDeferred) {
         pending_power_on_ = true;
@@ -770,17 +580,16 @@ DisplayError DisplayBase::SetDisplayState(DisplayState state, bool teardown,
 
     error = comp_manager_->ReconfigureDisplay(display_comp_ctx_, display_attributes_,
                                               hw_panel_info_, mixer_attributes_, fb_config_,
-                                              &(default_clock_hz_));
+                                              &(default_qos_data_.clock_hz));
     if (error != kErrorNone) {
       return error;
     }
-    cached_qos_data_.clock_hz = default_clock_hz_;
 
     active = true;
     break;
 
   case kStateDoze:
-    error = hw_intf_->Doze(cached_qos_data_, release_fence);
+    error = hw_intf_->Doze(default_qos_data_, release_fence);
     if (error != kErrorNone) {
       if (error == kErrorDeferred) {
         pending_doze_ = true;
@@ -793,7 +602,7 @@ DisplayError DisplayBase::SetDisplayState(DisplayState state, bool teardown,
     break;
 
   case kStateDozeSuspend:
-    error = hw_intf_->DozeSuspend(cached_qos_data_, release_fence);
+    error = hw_intf_->DozeSuspend(default_qos_data_, release_fence);
     if (display_type_ != kBuiltIn) {
       active = true;
     }
@@ -826,8 +635,7 @@ DisplayError DisplayBase::SetDisplayState(DisplayState state, bool teardown,
       active_ = active;
       state_ = state;
     }
-    comp_manager_->SetDisplayState(display_comp_ctx_, state,
-                                   release_fence ? *release_fence : nullptr);
+    comp_manager_->SetDisplayState(display_comp_ctx_, state, release_fence ? *release_fence : -1);
 
     // If previously requested power on state is still pending reset it on any new display state
     // request and handle the new request.
@@ -839,7 +647,7 @@ DisplayError DisplayBase::SetDisplayState(DisplayState state, bool teardown,
   // Handle vsync pending on resume, Since the power on commit is synchronous we pass -1 as retire
   // fence otherwise pass valid retire fence
   if (state_ == kStateOn) {
-    return HandlePendingVSyncEnable(nullptr /* retire fence */);
+    return HandlePendingVSyncEnable(-1 /* retire fence */);
   }
 
   return error;
@@ -906,8 +714,8 @@ std::string DisplayBase::Dump() {
   os << "\n HDR Panel:" << hw_panel_info_.hdr_enabled;
   os << " QSync:" << hw_panel_info_.qsync_support;
   os << " DynBitclk:" << hw_panel_info_.dyn_bitclk_support;
-  os << "\n Left Split:" << hw_panel_info_.split_info.left_split
-     << " Right Split:" << hw_panel_info_.split_info.right_split;
+  os << "\n Left Split:" << hw_panel_info_.split_info.left_split << " Right Split:"
+     << hw_panel_info_.split_info.right_split;
   os << "\n PartialUpdate:" << hw_panel_info_.partial_update;
   if (hw_panel_info_.partial_update) {
     os << "\n ROI Min w:" << hw_panel_info_.min_roi_width;
@@ -918,9 +726,10 @@ std::string DisplayBase::Dump() {
   }
   os << "\n FPS min:" << hw_panel_info_.min_fps << " max:" << hw_panel_info_.max_fps
      << " cur:" << display_attributes_.fps;
-  os << " TransferTime: " << hw_panel_info_.transfer_time_us << "us";
+  os << " TransferTime: " << hw_panel_info_.transfer_time_us <<"us";
   os << " MaxBrightness:" << hw_panel_info_.panel_max_brightness;
-  os << "\n Display WxH: " << display_attributes_.x_pixels << "x" << display_attributes_.y_pixels;
+  os << "\n Display WxH: " << display_attributes_.x_pixels << "x"
+     << display_attributes_.y_pixels;
   os << " MixerWxH: " << mixer_attributes_.width << "x" << mixer_attributes_.height;
   os << " DPI: " << display_attributes_.x_dpi << "x" << display_attributes_.y_dpi;
   os << " LM_Split: " << display_attributes_.is_device_split;
@@ -932,7 +741,6 @@ std::string DisplayBase::Dump() {
   os << " h_total: " << display_attributes_.h_total;
   os << " clk: " << display_attributes_.clock_khz;
   os << " Topology: " << display_attributes_.topology;
-  os << " Qsync mode: " << active_qsync_mode_;
   os << std::noboolalpha;
 
   os << "\nCurrent Color Mode: " << current_color_mode_.c_str();
@@ -959,8 +767,8 @@ std::string DisplayBase::Dump() {
 
   LayerBuffer *out_buffer = hw_layers_.info.stack->output_buffer;
   if (out_buffer) {
-    os << "\n Output buffer res: " << out_buffer->width << "x" << out_buffer->height
-       << " format: " << GetFormatString(out_buffer->format);
+    os << "\n Output buffer res: " << out_buffer->width << "x" << out_buffer->height << " format: "
+      << GetFormatString(out_buffer->format);
   }
   HWLayersInfo &layer_info = hw_layers_.info;
   for (uint32_t i = 0; i < layer_info.left_frame_roi.size(); i++) {
@@ -981,9 +789,9 @@ std::string DisplayBase::Dump() {
       INT(fb_roi.right) << " " << INT(fb_roi.bottom) << ")";
   }
 
-  const char *header  = "\n| Idx |   Comp Type   |   Split   | Pipe |    W x H    |          Format          |  Src Rect (L T R B) |  Dst Rect (L T R B) |  Z | Pipe Flags | Deci(HxV) | CS | Rng | Tr |";  //NOLINT
-  const char *newline = "\n|-----|---------------|-----------|------|-------------|--------------------------|---------------------|---------------------|----|------------|-----------|----|-----|----|";  //NOLINT
-  const char *format  = "\n| %3s | %13s | %9s | %4d | %4d x %4d | %24s | %4d %4d %4d %4d | %4d %4d %4d %4d | %2s | %10s | %9s | %2s | %3s | %2s |";  //NOLINT
+  const char *header  = "\n| Idx |  Comp Type |   Split   | Pipe |    W x H    |          Format          |  Src Rect (L T R B) |  Dst Rect (L T R B) |  Z | Pipe Flags | Deci(HxV) | CS | Rng | Tr |";  //NOLINT
+  const char *newline = "\n|-----|------------|-----------|------|-------------|--------------------------|---------------------|---------------------|----|------------|-----------|----|-----|----|";  //NOLINT
+  const char *format  = "\n| %3s | %10s | %9s | %4d | %4d x %4d | %24s | %4d %4d %4d %4d | %4d %4d %4d %4d | %2s | %10s | %9s | %2s | %3s | %2s |";  //NOLINT
 
   os << "\n";
   os << newline;
@@ -1003,7 +811,6 @@ std::string DisplayBase::Dump() {
     const char *comp_type = GetName(sdm_layer->composition);
     const char *buffer_format = GetFormatString(input_buffer->format);
     const char *pipe_split[2] = { "Pipe-1", "Pipe-2" };
-    const char *rot_pipe[2] = { "Rot-inl-1", "Rot-inl-2" };
     char idx[8];
 
     snprintf(idx, sizeof(idx), "%d", layer_index);
@@ -1015,7 +822,7 @@ std::string DisplayBase::Dump() {
       LayerRect &dst_roi = rotate.dst_roi;
       char rot[12] = { 0 };
 
-      snprintf(rot, sizeof(rot), "Rot-%s-%d", layer_config.use_inline_rot ?
+      snprintf(rot, sizeof(rot), "Rot-%s-%d", hw_rotator_session.mode == kRotatorInline ?
                "inl" : "off", count + 1);
 
       snprintf(row, sizeof(row), format, idx, comp_type, rot,
@@ -1063,7 +870,6 @@ std::string DisplayBase::Dump() {
       char color_primary[8] = { 0 };
       char range[8] = { 0 };
       char transfer[8] = { 0 };
-      bool rot = layer_config.use_inline_rot;
 
       HWPipeInfo &pipe = (count == 0) ? layer_config.left_pipe : layer_config.right_pipe;
 
@@ -1073,6 +879,9 @@ std::string DisplayBase::Dump() {
 
       LayerRect src_roi = pipe.src_roi;
       LayerRect &dst_roi = pipe.dst_roi;
+      if (hw_rotator_session.mode == kRotatorInline) {
+        src_roi = hw_rotator_session.hw_rotate_info[count].dst_roi;
+      }
 
       snprintf(z_order, sizeof(z_order), "%d", pipe.z_order);
       snprintf(flags, sizeof(flags), "0x%08x", pipe.flags);
@@ -1084,7 +893,7 @@ std::string DisplayBase::Dump() {
       snprintf(transfer, sizeof(transfer), "%d", color_metadata.transfer);
 
       char row[1024];
-      snprintf(row, sizeof(row), format, idx, comp_type, rot ? rot_pipe[count] : pipe_split[count],
+      snprintf(row, sizeof(row), format, idx, comp_type, pipe_split[count],
                pipe.pipe_id, input_buffer->width, input_buffer->height,
                buffer_format, INT(src_roi.left), INT(src_roi.top),
                INT(src_roi.right), INT(src_roi.bottom), INT(dst_roi.left),
@@ -1105,13 +914,14 @@ std::string DisplayBase::Dump() {
 
 const char * DisplayBase::GetName(const LayerComposition &composition) {
   switch (composition) {
-  case kCompositionGPU:           return "GPU";
-  case kCompositionSDE:           return "SDE";
-  case kCompositionCursor:        return "CURSOR";
-  case kCompositionStitch:        return "STITCH";
-  case kCompositionGPUTarget:     return "GPU_TARGET";
-  case kCompositionStitchTarget:  return "STITCH_TARGET";
-  default:                        return "UNKNOWN";
+  case kCompositionGPU:         return "GPU";
+  case kCompositionSDE:         return "SDE";
+  case kCompositionCursor:      return "CURSOR";
+  case kCompositionHybrid:      return "HYBRID";
+  case kCompositionBlit:        return "BLIT";
+  case kCompositionGPUTarget:   return "GPU_TARGET";
+  case kCompositionBlitTarget:  return "BLIT_TARGET";
+  default:                      return "UNKNOWN";
   }
 }
 
@@ -1189,54 +999,36 @@ DisplayError DisplayBase::SetColorMode(const std::string &color_mode) {
     return kErrorNotSupported;
   }
 
-  if (color_mode.empty()) {
-    return kErrorParameters;
+  DisplayError error = kErrorNone;
+  error = SetColorModeInternal(color_mode);
+  if (error != kErrorNone) {
+    return error;
   }
 
-  DisplayError error = kErrorNone;
-  std::string dynamic_range = kSdr, str_render_intent;
+  std::string dynamic_range = kSdr;
   if (IsSupportColorModeAttribute(color_mode)) {
     auto it_mode = color_mode_attr_map_.find(color_mode);
     GetValueOfModeAttribute(it_mode->second, kDynamicRangeAttribute, &dynamic_range);
-    GetValueOfModeAttribute(it_mode->second, kRenderIntentAttribute, &str_render_intent);
   }
+
+  comp_manager_->ControlDpps(dynamic_range != kHdr);
 
   current_color_mode_ = color_mode;
   PrimariesTransfer blend_space = {};
   blend_space = GetBlendSpaceFromColorMode();
   error = comp_manager_->SetBlendSpace(display_comp_ctx_, blend_space);
   if (error != kErrorNone) {
-    DLOGE("SetBlendSpace failed, error = %d display_type_ = %d", error, display_type_);
+    DLOGE("SetBlendSpace failed, error = %d display_type_= %d", error, display_type_);
   }
-
-  error = hw_intf_->SetBlendSpace(blend_space);
-  if (error != kErrorNone) {
-    DLOGE("Failed to pass blend space, error = %d display_type_ = %d", error, display_type_);
-  }
-
-  error = SetColorModeInternal(color_mode, str_render_intent,  blend_space);
-  if (error != kErrorNone) {
-    return error;
-  }
-
-  comp_manager_->ControlDpps(dynamic_range != kHdr);
 
   return error;
 }
 
 DisplayError DisplayBase::SetColorModeById(int32_t color_mode_id) {
-  for (auto it : color_mode_map_) {
-    if (it.second->id == color_mode_id) {
-      return SetColorMode(it.first);
-    }
-  }
-
-  return kErrorNotSupported;
+  return color_mgr_->ColorMgrSetMode(color_mode_id);
 }
 
-DisplayError DisplayBase::SetColorModeInternal(const std::string &color_mode,
-                                               const std::string &str_render_intent,
-                                               const PrimariesTransfer &pt) {
+DisplayError DisplayBase::SetColorModeInternal(const std::string &color_mode) {
   DLOGV_IF(kTagQDCM, "Color Mode = %s", color_mode.c_str());
 
   ColorModeMap::iterator it = color_mode_map_.find(color_mode);
@@ -1250,23 +1042,7 @@ DisplayError DisplayBase::SetColorModeInternal(const std::string &color_mode,
   DLOGV_IF(kTagQDCM, "Color Mode Name = %s corresponding mode_id = %d", sde_display_mode->name,
            sde_display_mode->id);
   DisplayError error = kErrorNone;
-  int32_t render_intent = 0;
-  if (!str_render_intent.empty()) {
-    render_intent = std::stoi(str_render_intent);
-  }
-
-  if (render_intent < 0 || render_intent > MAX_EXTENDED_RENDER_INTENT) {
-    DLOGW("Invalid render intent %d for mode id = %d", render_intent, sde_display_mode->id);
-    return kErrorNotSupported;
-  }
-
   error = color_mgr_->ColorMgrSetMode(sde_display_mode->id);
-  if (error != kErrorNone) {
-    DLOGE("Failed for mode id = %d", sde_display_mode->id);
-    return error;
-  }
-
-  error = color_mgr_->ColorMgrSetModeWithRenderIntent(sde_display_mode->id, pt, render_intent);
   if (error != kErrorNone) {
     DLOGE("Failed for mode id = %d", sde_display_mode->id);
     return error;
@@ -1353,38 +1129,6 @@ DisplayError DisplayBase::GetDefaultColorMode(std::string *color_mode) {
   return kErrorNotSupported;
 }
 
-DisplayError DisplayBase::ApplyDefaultDisplayMode() {
-  lock_guard<recursive_mutex> obj(recursive_mutex_);
-  DisplayError error = kErrorNone;
-  if (color_mgr_) {
-    error = color_mgr_->ApplyDefaultDisplayMode();
-    // Apply default mode failed
-    if (error != kErrorNone) {
-      DLOGI("default mode not found");
-      return error;
-    }
-    DeInitializeColorModes();
-    // Default mode apply is called during first frame, if file system
-    // where mode files is present, ColorManager will not find any modes.
-    // Once boot animation is complete we re-try to apply the modes, since
-    // file system should be mounted. InitColorModes needs to called again
-    error = InitializeColorModes();
-    if (error != kErrorNone) {
-      DLOGE("failed to initial modes\n");
-      return error;
-    }
-    if (color_modes_cs_.size() > 0) {
-      error = comp_manager_->SetColorModesInfo(display_comp_ctx_, color_modes_cs_);
-      if (error) {
-        DLOGW("SetColorModesInfo failed on display = %d", display_type_);
-      }
-    }
-  } else {
-    return kErrorParameters;
-  }
-  return kErrorNone;
-}
-
 DisplayError DisplayBase::SetCursorPosition(int x, int y) {
   lock_guard<recursive_mutex> obj(recursive_mutex_);
   if (state_ != kStateOn) {
@@ -1419,11 +1163,11 @@ DisplayError DisplayBase::GetRefreshRateRange(uint32_t *min_refresh_rate,
   return error;
 }
 
-DisplayError DisplayBase::HandlePendingVSyncEnable(const shared_ptr<Fence> &retire_fence) {
+DisplayError DisplayBase::HandlePendingVSyncEnable(int32_t retire_fence) {
   if (vsync_enable_pending_) {
     // Retire fence signalling confirms that CRTC enabled, hence wait for retire fence before
     // we enable vsync
-    Fence::Wait(retire_fence);
+    buffer_sync_handler_->SyncWait(retire_fence);
 
     DisplayError error = SetVSyncState(true /* enable */);
     if (error != kErrorNone) {
@@ -1503,11 +1247,10 @@ DisplayError DisplayBase::ReconfigureDisplay() {
 
   error = comp_manager_->ReconfigureDisplay(display_comp_ctx_, display_attributes, hw_panel_info,
                                             mixer_attributes, fb_config_,
-                                            &(default_clock_hz_));
+                                            &(default_qos_data_.clock_hz));
   if (error != kErrorNone) {
     return error;
   }
-  cached_qos_data_.clock_hz = default_clock_hz_;
 
   bool disble_pu = true;
   if (mixer_unchanged && panel_unchanged) {
@@ -1567,15 +1310,6 @@ DisplayError DisplayBase::ReconfigureMixer(uint32_t width, uint32_t height) {
   }
 
   DLOGD_IF(kTagQDCM, "Reconfiguring mixer with width : %d, height : %d", width, height);
-
-  LayerRect fb_rect = { 0.0f, 0.0f, FLOAT(fb_config_.x_pixels), FLOAT(fb_config_.y_pixels) };
-  LayerRect mixer_rect = { 0.0f, 0.0f, FLOAT(width), FLOAT(height) };
-
-  error = comp_manager_->ValidateScaling(fb_rect, mixer_rect, false /* rotate90 */);
-  if (error != kErrorNone) {
-    return error;
-  }
-
   HWMixerAttributes mixer_attributes;
   mixer_attributes.width = width;
   mixer_attributes.height = height;
@@ -1611,8 +1345,6 @@ bool DisplayBase::NeedsMixerReconfiguration(LayerStack *layer_stack, uint32_t *n
   lock_guard<recursive_mutex> obj(recursive_mutex_);
   uint32_t mixer_width = mixer_attributes_.width;
   uint32_t mixer_height = mixer_attributes_.height;
-  uint32_t fb_width = fb_config_.x_pixels;
-  uint32_t fb_height = fb_config_.y_pixels;
 
   if (req_mixer_width_ && req_mixer_height_) {
     DLOGD_IF(kTagDisplay, "Required mixer width : %d, height : %d",
@@ -1622,11 +1354,13 @@ bool DisplayBase::NeedsMixerReconfiguration(LayerStack *layer_stack, uint32_t *n
     return (req_mixer_width_ != mixer_width || req_mixer_height_ != mixer_height);
   }
 
-  if (!custom_mixer_resolution_ && mixer_width == fb_width && mixer_height == fb_height) {
+  if (!custom_mixer_resolution_) {
     return false;
   }
 
   uint32_t layer_count = UINT32(layer_stack->layers.size());
+  uint32_t fb_width  = fb_config_.x_pixels;
+  uint32_t fb_height  = fb_config_.y_pixels;
   uint32_t fb_area = fb_width * fb_height;
   LayerRect fb_rect = (LayerRect) {0.0f, 0.0f, FLOAT(fb_width), FLOAT(fb_height)};
   uint32_t display_width = display_attributes_.x_pixels;
@@ -1717,11 +1451,10 @@ DisplayError DisplayBase::SetFrameBufferConfig(const DisplayConfigVariableInfo &
 
   error =  comp_manager_->ReconfigureDisplay(display_comp_ctx_, display_attributes_, hw_panel_info_,
                                              mixer_attributes_, variable_info,
-                                             &(default_clock_hz_));
+                                             &(default_qos_data_.clock_hz));
   if (error != kErrorNone) {
     return error;
   }
-  cached_qos_data_.clock_hz = default_clock_hz_;
 
   fb_config_.x_pixels = width;
   fb_config_.y_pixels = height;
@@ -1750,10 +1483,14 @@ DisplayError DisplayBase::SetDetailEnhancerData(const DisplayDetailEnhancerData 
   }
   // TODO(user): Temporary changes, to be removed when DRM driver supports
   // Partial update with Destination scaler enabled.
-  if (de_data.enable) {
-    disable_pu_on_dest_scaler_ = true;
+  if (GetDriverType() == DriverType::DRM) {
+    if (de_data.enable) {
+      disable_pu_on_dest_scaler_ = true;
+    } else {
+      SetPUonDestScaler();
+    }
   } else {
-    SetPUonDestScaler();
+    DisablePartialUpdateOneFrame();
   }
 
   return kErrorNone;
@@ -1820,8 +1557,9 @@ void DisplayBase::CommitLayerParams(LayerStack *layer_stack) {
     hw_layer.input_buffer.planes[0].offset = sdm_layer->input_buffer.planes[0].offset;
     hw_layer.input_buffer.planes[0].stride = sdm_layer->input_buffer.planes[0].stride;
     hw_layer.input_buffer.size = sdm_layer->input_buffer.size;
-    hw_layer.input_buffer.acquire_fence = sdm_layer->input_buffer.acquire_fence;
+    hw_layer.input_buffer.acquire_fence_fd = sdm_layer->input_buffer.acquire_fence_fd;
     hw_layer.input_buffer.handle_id = sdm_layer->input_buffer.handle_id;
+    hw_layer.input_buffer.buffer_id = sdm_layer->input_buffer.buffer_id;
     // TODO(user): Other FBT layer attributes like surface damage, dataspace, secure camera and
     // secure display flags are also updated during SetClientTarget() called between validate and
     // commit. Need to revist this and update it accordingly for FBT layer.
@@ -1833,10 +1571,6 @@ void DisplayBase::CommitLayerParams(LayerStack *layer_stack) {
       hw_layer.input_buffer.unaligned_width = sdm_layer->input_buffer.unaligned_width;
       hw_layer.input_buffer.unaligned_height = sdm_layer->input_buffer.unaligned_height;
     }
-  }
-
-  if (layer_stack->elapse_timestamp) {
-    hw_layers_.elapse_timestamp = layer_stack->elapse_timestamp;
   }
 
   return;
@@ -1858,14 +1592,26 @@ void DisplayBase::PostCommitLayerParams(LayerStack *layer_stack) {
     // output fence fd and assign it to layer's input buffer release fence fd.
     if (std::find(fence_dup_flag.begin(), fence_dup_flag.end(), sdm_layer_index) ==
         fence_dup_flag.end()) {
-      sdm_layer->input_buffer.release_fence = hw_layer.input_buffer.release_fence;
+      sdm_layer->input_buffer.release_fence_fd = hw_layer.input_buffer.release_fence_fd;
       fence_dup_flag.push_back(sdm_layer_index);
     } else {
-      sdm_layer->input_buffer.release_fence = Fence::Merge(
-              hw_layer.input_buffer.release_fence, sdm_layer->input_buffer.release_fence);
+      int temp = -1;
+      buffer_sync_handler_->SyncMerge(hw_layer.input_buffer.release_fence_fd,
+                                      sdm_layer->input_buffer.release_fence_fd, &temp);
+
+      if (hw_layer.input_buffer.release_fence_fd >= 0) {
+        Sys::close_(hw_layer.input_buffer.release_fence_fd);
+        hw_layer.input_buffer.release_fence_fd = -1;
+      }
+
+      if (sdm_layer->input_buffer.release_fence_fd >= 0) {
+        Sys::close_(sdm_layer->input_buffer.release_fence_fd);
+        sdm_layer->input_buffer.release_fence_fd = -1;
+      }
+
+      sdm_layer->input_buffer.release_fence_fd = temp;
     }
   }
-  cached_qos_data_ = hw_layers_.qos_data;
 
   return;
 }
@@ -1891,12 +1637,17 @@ DisplayError DisplayBase::InitializeColorModes() {
       DLOGE("Failed");
       return error;
     }
+    int32_t default_id = kInvalidModeId;
+    error = color_mgr_->ColorMgrGetDefaultModeID(&default_id);
 
     AttrVal var;
-    uint32_t num_insert_color_modes = 0;
     for (uint32_t i = 0; i < num_color_modes_; i++) {
       DLOGV_IF(kTagQDCM, "Color Mode[%d]: Name = %s mode_id = %d", i, color_modes_[i].name,
                color_modes_[i].id);
+      // get the name of default color mode
+      if (color_modes_[i].id == default_id) {
+        current_color_mode_ = color_modes_[i].name;
+      }
       auto it = color_mode_map_.find(color_modes_[i].name);
       if (it != color_mode_map_.end()) {
         if (it->second->id < color_modes_[i].id) {
@@ -1920,12 +1671,9 @@ DisplayError DisplayBase::InitializeColorModes() {
           // If target doesn't support SSPP tone maping and color mode is HDR,
           // add bt2020pq and bt2020hlg color modes.
           if (hw_resource_info_.src_tone_map.none() && IsHdrMode(var)) {
-            std::string str_render_intent;
-            GetValueOfModeAttribute(var, kRenderIntentAttribute, &str_render_intent);
             color_mode_map_.insert(std::make_pair(kBt2020Pq, &color_modes_[i]));
             color_mode_map_.insert(std::make_pair(kBt2020Hlg, &color_modes_[i]));
-            num_insert_color_modes = 2;
-            InsertBT2020PqHlgModes(str_render_intent);
+            InsertBT2020PqHlgModes();
           }
         }
         std::vector<PrimariesTransfer> pt_list = {};
@@ -1943,8 +1691,6 @@ DisplayError DisplayBase::InitializeColorModes() {
         color_modes_cs_.end()) {
       color_modes_cs_.push_back(pt);
     }
-
-    num_color_modes_ += num_insert_color_modes;
   }
 
   return kErrorNone;
@@ -2057,6 +1803,9 @@ DisplayError DisplayBase::ValidateDataspace(const ColorMetaData &color_metadata)
 // TODO(user): Temporary changes, to be removed when DRM driver supports
 // Partial update with Destination scaler enabled.
 void DisplayBase::SetPUonDestScaler() {
+  if (GetDriverType() == DriverType::FB) {
+    return;
+  }
   uint32_t mixer_width = mixer_attributes_.width;
   uint32_t mixer_height = mixer_attributes_.height;
   uint32_t display_width = display_attributes_.x_pixels;
@@ -2176,11 +1925,6 @@ bool DisplayBase::SetHdrModeAtStart(LayerStack *layer_stack) {
 PrimariesTransfer DisplayBase::GetBlendSpaceFromColorMode() {
   PrimariesTransfer pt = {};
   auto current_color_attr_ = color_mode_attr_map_.find(current_color_mode_);
-  if (current_color_attr_ == color_mode_attr_map_.end()) {
-    DLOGE("The attritbutes is not present in color mode: %s", current_color_mode_.c_str());
-    return pt;
-  }
-
   AttrVal attr = current_color_attr_->second;
   std::string color_gamut = kNative, dynamic_range = kSdr, pic_quality = kStandard;
   std::string transfer = {};
@@ -2215,13 +1959,10 @@ PrimariesTransfer DisplayBase::GetBlendSpaceFromColorMode() {
   return pt;
 }
 
-void DisplayBase::InsertBT2020PqHlgModes(const std::string &str_render_intent) {
+void DisplayBase::InsertBT2020PqHlgModes() {
   AttrVal hdr_var = {};
   hdr_var.push_back(std::make_pair(kColorGamutAttribute, kBt2020));
   hdr_var.push_back(std::make_pair(kPictureQualityAttribute, kStandard));
-  if (!str_render_intent.empty()) {
-    hdr_var.push_back(std::make_pair(kRenderIntentAttribute, str_render_intent));
-  }
   hdr_var.push_back(std::make_pair(kGammaTransferAttribute, kSt2084));
   color_mode_attr_map_.insert(std::make_pair(kBt2020Pq, hdr_var));
   hdr_var.pop_back();
@@ -2243,26 +1984,34 @@ bool DisplayBase::IsHdrMode(const AttrVal &attr) {
 }
 
 bool DisplayBase::CanSkipValidate() {
-  bool needs_buffer_swap = false;
-  bool skip_validate = comp_manager_->CanSkipValidate(display_comp_ctx_, &needs_buffer_swap);
+  return (!is_idle_timeout_) && comp_manager_->CanSkipValidate(display_comp_ctx_) && !lut_swap_;
+}
 
-  if (needs_buffer_swap) {
-    hw_layers_.updates_mask.set(kSwapBuffers);
-    DisplayError error = comp_manager_->SwapBuffers(display_comp_ctx_);
-    if (error != kErrorNone) {
-      // Buffers couldn't be swapped.
-      skip_validate = false;
+void DisplayBase::SetLutSwapFlag() {
+  uint32_t hw_layer_count = UINT32(hw_layers_.info.hw_layers.size());
+  for (uint32_t i = 0; i < hw_layer_count; i++) {
+    HWPipeInfo *left_pipe = &hw_layers_.config[i].left_pipe;
+    HWPipeInfo *right_pipe = &hw_layers_.config[i].right_pipe;
+    for (uint32_t count = 0; count < 2; count++) {
+      HWPipeInfo *pipe_info = (count == 0) ? left_pipe : right_pipe;
+      if (!pipe_info->valid || !pipe_info->scale_data.lut_flag.lut_swap) {
+        continue;
+      }
+      lut_swap_ = true;
+      return;
     }
   }
 
-  return skip_validate;
+  // No pipe needs lut swap.
+  lut_swap_ = false;
+  return;
 }
 
-DisplayError DisplayBase::HandlePendingPowerState(const shared_ptr<Fence> &retire_fence) {
+DisplayError DisplayBase::HandlePendingPowerState(int32_t retire_fence) {
   if (pending_doze_ || pending_power_on_) {
     // Retire fence signalling confirms that CRTC enabled, hence wait for retire fence before
     // we enable vsync
-    Fence::Wait(retire_fence);
+    buffer_sync_handler_->SyncWait(retire_fence);
 
     if (pending_doze_) {
       state_ = kStateDoze;
@@ -2281,33 +2030,6 @@ DisplayError DisplayBase::HandlePendingPowerState(const shared_ptr<Fence> &retir
     pending_power_on_ = false;
   }
   return kErrorNone;
-}
-
-bool DisplayBase::CheckResourceState() {
-  return comp_manager_->CheckResourceState(display_comp_ctx_);
-}
-DisplayError DisplayBase::colorSamplingOn() {
-  return kErrorNone;
-}
-
-DisplayError DisplayBase::colorSamplingOff() {
-  return kErrorNone;
-}
-
-bool DisplayBase::GameEnhanceSupported() {
-  if (color_mgr_) {
-    return color_mgr_->GameEnhanceSupported();
-  }
-  return false;
-}
-
-DisplayError DisplayBase::OnMinHdcpEncryptionLevelChange(uint32_t min_enc_level) {
-  lock_guard<recursive_mutex> obj(recursive_mutex_);
-  return hw_intf_->OnMinHdcpEncryptionLevelChange(min_enc_level);
-}
-
-DisplayError DisplayBase::DelayFirstCommit() {
-  return hw_intf_->DelayFirstCommit();
 }
 
 }  // namespace sdm

@@ -32,10 +32,6 @@
 #include <algorithm>
 #include <vector>
 
-#ifndef QMAA
-#include <linux/msm_ion.h>
-#endif
-
 #include "gr_allocator.h"
 #include "gr_utils.h"
 #include "gralloc_priv.h"
@@ -70,7 +66,11 @@
 #define ION_SC_FLAGS ION_SECURE
 #define ION_SC_PREVIEW_FLAGS ION_SECURE
 #else  // MASTER_SIDE_CP
+#ifdef HYPERVISOR
+#define CP_HEAP_ID ION_SECURE_DISPLAY_HEAP_ID
+#else
 #define CP_HEAP_ID ION_SECURE_HEAP_ID
+#endif
 #define SD_HEAP_ID ION_SECURE_DISPLAY_HEAP_ID
 #define ION_CP_FLAGS (ION_SECURE | ION_FLAG_CP_PIXEL)
 #define ION_SD_FLAGS (ION_SECURE | ION_FLAG_CP_SEC_DISPLAY)
@@ -203,7 +203,6 @@ void Allocator::GetIonHeapInfo(uint64_t usage, unsigned int *ion_heap_id, unsign
   unsigned int heap_id = 0;
   unsigned int type = 0;
   uint32_t flags = 0;
-#ifndef QMAA
   if (usage & GRALLOC_USAGE_PROTECTED) {
     if (usage & GRALLOC_USAGE_PRIVATE_SECURE_DISPLAY) {
       heap_id = ION_HEAP(SD_HEAP_ID);
@@ -249,7 +248,6 @@ void Allocator::GetIonHeapInfo(uint64_t usage, unsigned int *ion_heap_id, unsign
   if (!heap_id) {
     heap_id = ION_HEAP(ION_SYSTEM_HEAP_ID);
   }
-#endif
 
   *alloc_type = type;
   *ion_flags = flags;

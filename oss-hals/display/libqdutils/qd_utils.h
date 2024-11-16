@@ -63,6 +63,11 @@ int getHDMINode(void);
 bool isDPConnected();
 int getDPTestConfig(uint32_t *panelBpp, uint32_t *patternType);
 
+enum class DriverType {
+    FB = 0,
+    DRM,
+};
+DriverType getDriverType();
 const char *GetHALPixelFormatString(int format);
 
 }; //namespace qdutils

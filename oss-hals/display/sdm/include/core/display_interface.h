@@ -30,43 +30,6 @@
   the target device. Each display device represents a unique display target which may be either a
   physical panel or an output buffer..
 */
-
-/*
-* Changes from Qualcomm Innovation Center are provided under the following license:
-*
-* Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
-*
-* Redistribution and use in source and binary forms, with or without
-* modification, are permitted (subject to the limitations in the
-* disclaimer below) provided that the following conditions are met:
-*
-*    * Redistributions of source code must retain the above copyright
-*      notice, this list of conditions and the following disclaimer.
-*
-*    * Redistributions in binary form must reproduce the above
-*      copyright notice, this list of conditions and the following
-*      disclaimer in the documentation and/or other materials provided
-*      with the distribution.
-*
-*    * Neither the name of Qualcomm Innovation Center, Inc. nor the names of its
-*      contributors may be used to endorse or promote products derived
-*      from this software without specific prior written permission.
-*
-* NO EXPRESS OR IMPLIED LICENSES TO ANY PARTY'S PATENT RIGHTS ARE
-* GRANTED BY THIS LICENSE. THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT
-* HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED
-* WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF
-* MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED.
-* IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR
-* ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
-* DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE
-* GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-* INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER
-* IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR
-* OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
-* IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-*/
-
 #ifndef __DISPLAY_INTERFACE_H__
 #define __DISPLAY_INTERFACE_H__
 
@@ -136,7 +99,6 @@ enum DetailEnhancerOverrideFlags {
   kOverrideDEThrLow            = 0x80,    // Specifies user defined DE low threshold
   kOverrideDEThrHigh           = 0x100,   // Specifies user defined DE high threshold
   kOverrideDEFilterConfig      = 0x200,   // Specifies user defined scaling filter config
-  kOverrideDEBlend             = 0x400,   // Specifies user defined DE blend.
   kOverrideDEMax               = 0xFFFFFFFF,
 };
 
@@ -185,9 +147,7 @@ enum DisplayEvent {
   kIdlePowerCollapse,       // Event triggered by Idle Power Collapse.
   kPanelDeadEvent,          // Event triggered by ESD.
   kDisplayPowerResetEvent,  // Event triggered by Hardware Recovery.
-  kInvalidateDisplay,       // Event triggered by DrawCycle thread to Invalidate display.
-  kSyncInvalidateDisplay,   // Event triggered by Non-DrawCycle threads to Invalidate display.
-  kPostIdleTimeout,         // Event triggered after entering idle.
+  kInvalidateDisplay,       // Event triggered to Invalidate display.
 };
 
 /*! @brief This enum represents the secure events received by Display HAL. */
@@ -215,14 +175,6 @@ struct DisplayDppsAd4RoiCfg {
   uint32_t factor_out;  //!< the strength factor of outside ROI region
 };
 
-/*! @brief This enum defines frame trigger modes. */
-enum FrameTriggerMode {
-  kFrameTriggerDefault,      //!< Wait for pp_done of previous frame to trigger new frame
-  kFrameTriggerSerialize,    //!< Trigger new frame and wait for pp_done of this frame
-  kFrameTriggerPostedStart,  //!< Posted start mode, trigger new frame without pp_done
-  kFrameTriggerMax,
-};
-
 /*! @brief This structure defines configuration for fixed properties of a display device.
 
   @sa DisplayInterface::GetConfig
@@ -232,15 +184,13 @@ struct DisplayConfigFixedInfo {
   bool underscan = false;              //!< If display support CE underscan.
   bool secure = false;                 //!< If this display is capable of handling secure content.
   bool is_cmdmode = false;             //!< If panel is command mode panel.
-  bool hdr_supported = false;          //!< If HDR10 is supported.
-  bool hdr_plus_supported = false;     //!< If HDR10+ is supported.
+  bool hdr_supported = false;          //!< if HDR is enabled
   bool hdr_metadata_type_one = false;  //!< Metadata type one obtained from HDR sink
   uint32_t hdr_eotf = 0;               //!< Electro optical transfer function
   float max_luminance = 0.0f;          //!< From Panel's peak luminance
   float average_luminance = 0.0f;      //!< From Panel's average luminance
   float min_luminance = 0.0f;          //!< From Panel's blackness level
   bool partial_update = false;         //!< If display supports Partial Update.
-  bool readback_supported = false;     //!< If display supports buffer readback.
 };
 
 /*! @brief This structure defines configuration for variable properties of a display device.
@@ -269,7 +219,7 @@ struct DisplayConfigVariableInfo : public DisplayConfigGroupInfo {
   bool operator==(const DisplayConfigVariableInfo& info) const {
     return ((x_pixels == info.x_pixels) && (y_pixels == info.y_pixels) && (x_dpi == info.x_dpi) &&
             (y_dpi == info.y_dpi) && (fps == info.fps) && (vsync_period_ns == info.vsync_period_ns)
-            && (is_yuv == info.is_yuv));
+            && (is_yuv == info.is_yuv) && (smart_panel == info.smart_panel));
   }
 };
 
@@ -303,7 +253,6 @@ struct DisplayDetailEnhancerData {
                                       // Specifies context quality level
   ScalingFilterConfig filter_config = kFilterEdgeDirected;
                                       // Y/RGB filter configuration
-  uint32_t de_blend = 0;              // DE Unsharp Mask blend between High and Low frequencies
 };
 
 /*! @brief Display device event handler implemented by the client.
@@ -353,9 +302,6 @@ class DisplayEventHandler {
     @return \link DisplayError \endlink
   */
   virtual DisplayError CECMessage(char *message) = 0;
-
-  /*! @brief Event handler for Histogram messages received by Display HAL. */
-  virtual DisplayError HistogramEvent(int source_fd, uint32_t blob_id) = 0;
 
   /*! @brief Event handler for events received by Display HAL. */
   virtual DisplayError HandleEvent(DisplayEvent event) = 0;
@@ -503,7 +449,7 @@ class DisplayInterface {
     @sa SetDisplayState
   */
   virtual DisplayError SetDisplayState(DisplayState state, bool teardown,
-                                       shared_ptr<Fence> *release_fence) = 0;
+                                       int *release_fence) = 0;
 
   /*! @brief Method to set active configuration for variable properties of the display device.
 
@@ -532,11 +478,10 @@ class DisplayInterface {
   /*! @brief Method to set idle timeout value. Idle fallback is disabled with timeout value 0.
 
     @param[in] active_ms value in milliseconds.
-    @param[in] in_active_ms value in milliseconds.
 
     @return \link void \endlink
   */
-  virtual void SetIdleTimeoutMs(uint32_t active_ms, uint32_t inactive_ms) = 0;
+  virtual void SetIdleTimeoutMs(uint32_t active_ms) = 0;
 
   /*! @brief Method to set maximum number of mixer stages for each display.
 
@@ -583,12 +528,9 @@ class DisplayInterface {
 
     @param[in] final_rate indicates whether refresh rate is final rate or can be changed by sdm
 
-    @param[in] idle_screen indicates whether screen is idle.
-
     @return \link DisplayError \endlink
   */
-  virtual DisplayError SetRefreshRate(uint32_t refresh_rate, bool final_rate,
-                                      bool idle_screen = false) = 0;
+  virtual DisplayError SetRefreshRate(uint32_t refresh_rate, bool final_rate) = 0;
 
   /*! @brief Method to get the refresh rate of a display.
 
@@ -702,12 +644,6 @@ class DisplayInterface {
   */
   virtual DisplayError GetDefaultColorMode(std::string *color_mode) = 0;
 
-  /*! @brief Method to request applying default display mode.
-
-    @return \link DisplayError \endlink
-  */
-  virtual DisplayError ApplyDefaultDisplayMode() = 0;
-
   /*! @brief Method to set the position of the hw cursor.
 
     @param[in] x \link x position \endlink
@@ -724,14 +660,6 @@ class DisplayInterface {
     @return \link DisplayError \endlink
   */
   virtual DisplayError GetPanelBrightness(float *brightness) = 0;
-
-  /*! @brief Method to get the max brightness level of the display
-
-    @param[out] max_brightness level
-
-    @return \link DisplayError \endlink
-  */
-  virtual DisplayError GetPanelMaxBrightness(uint32_t *max_brightness_level) = 0;
 
   /*! @brief Method to set layer mixer resolution.
 
@@ -887,14 +815,6 @@ class DisplayInterface {
   */
   virtual DisplayError TeardownConcurrentWriteback(void) = 0;
 
-  /*! @brief Method to set frame trigger mode for primary display.
-
-    @param[in] frame trigger mode
-
-    @return \link DisplayError \endlink
-  */
-  virtual DisplayError SetFrameTriggerMode(FrameTriggerMode mode) = 0;
-
   /*
    * Returns a string consisting of a dump of SDM's display and layer related state
    * as programmed to driver
@@ -935,11 +855,6 @@ class DisplayInterface {
   */
   virtual DisplayError GetDisplayIdentificationData(uint8_t *out_port, uint32_t *out_data_size,
                                                     uint8_t *out_data) = 0;
-  /*! @brief Method to turn on histogram events. */
-  virtual DisplayError colorSamplingOn() = 0;
-
-  /*! @brief Method to turn off histogram events. */
-  virtual DisplayError colorSamplingOff() = 0;
 
   /*! @brief Method to set min/max luminance for dynamic tonemapping of external device over WFD.
 
@@ -955,44 +870,6 @@ class DisplayInterface {
       @return \link boolean \endlink
   */
   virtual bool CanSkipValidate() = 0;
-
-  /*! @brief Method to set display backlight scale ratio.
-
-    @param[in] backlight scale ratio.
-
-    @return \link DisplayError \endlink
-  */
-  virtual DisplayError SetBLScale(uint32_t level) = 0;
-
-  /*! @brief Method to check if the Default resources are freed for display
-
-    @return \link bool \endlink
-  */
-  virtual bool CheckResourceState() = 0;
-
-  /*! @brief Method to check if game enhance feature is supported for display
-
-    @return \link bool \endlink
-  */
-  virtual bool GameEnhanceSupported() = 0;
-
-  /*! @brief Method to get the current qsync mode used.
-
-    @return \link DisplayError \endlink
-  */
-  virtual DisplayError GetQSyncMode(QSyncMode *qsync_mode) = 0;
-
-  /*! @brief Method to clear scaler LUTs.
-
-    @return \link DisplayError \endlink
-  */
-  virtual DisplayError ClearLUTs() = 0;
-
-  /*! @brief Method to skip first commit.
-
-    @return \link DisplayError \endlink
-  */
-  virtual DisplayError DelayFirstCommit() = 0;
 
  protected:
   virtual ~DisplayInterface() { }

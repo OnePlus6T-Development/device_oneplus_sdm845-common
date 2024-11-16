@@ -41,7 +41,6 @@ ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "omx_evrc_aenc.h"
 #include <errno.h>
 
-using namespace std;
 #define SLEEP_MS 100
 
 // omx_cmd_queue destructor
@@ -468,7 +467,7 @@ void omx_evrc_aenc::buffer_done_cb(OMX_BUFFERHEADERTYPE *bufHdr)
         pthread_mutex_lock(&in_buf_count_lock);
         m_evrc_pb_stats.ebd_cnt++;
         nNumInputBuf--;
-        DEBUG_DETAIL("EBD CB:: in_buf_len=%d nNumInputBuf=%d %d ebd_cnt \n",\
+        DEBUG_DETAIL("EBD CB:: in_buf_len=%d nNumInputBuf=%d %d ebd_cnt %d \n",\
                      m_evrc_pb_stats.tot_in_buf_len,
                      nNumInputBuf, m_evrc_pb_stats.ebd_cnt);
         pthread_mutex_unlock(&in_buf_count_lock);

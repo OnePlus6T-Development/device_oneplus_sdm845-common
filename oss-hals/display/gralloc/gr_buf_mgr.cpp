@@ -17,42 +17,6 @@
  * limitations under the License.
  */
 
-/*
-* Changes from Qualcomm Innovation Center are provided under the following license:
-*
-* Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
-*
-* Redistribution and use in source and binary forms, with or without
-* modification, are permitted (subject to the limitations in the
-* disclaimer below) provided that the following conditions are met:
-*
-*    * Redistributions of source code must retain the above copyright
-*      notice, this list of conditions and the following disclaimer.
-*
-*    * Redistributions in binary form must reproduce the above
-*      copyright notice, this list of conditions and the following
-*      disclaimer in the documentation and/or other materials provided
-*      with the distribution.
-*
-*    * Neither the name of Qualcomm Innovation Center, Inc. nor the names of its
-*      contributors may be used to endorse or promote products derived
-*      from this software without specific prior written permission.
-*
-* NO EXPRESS OR IMPLIED LICENSES TO ANY PARTY'S PATENT RIGHTS ARE
-* GRANTED BY THIS LICENSE. THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT
-* HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED
-* WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF
-* MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED.
-* IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR
-* ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
-* DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE
-* GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-* INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER
-* IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR
-* OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
-* IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-*/
-
 #define DEBUG 0
 
 #include "gr_buf_mgr.h"
@@ -62,13 +26,12 @@
 #include <gralloctypes/Gralloc4.h>
 #include <sys/mman.h>
 
-#include <algorithm>
 #include <iomanip>
 #include <sstream>
 #include <string>
 #include <utility>
 #include <vector>
-#include <fstream>
+
 #include "gr_adreno_info.h"
 #include "gr_buf_descriptor.h"
 #include "gr_priv_handle.h"
@@ -88,7 +51,6 @@ using aidl::android::hardware::graphics::common::Smpte2086;
 using aidl::android::hardware::graphics::common::StandardMetadataType;
 using aidl::android::hardware::graphics::common::XyColor;
 using ::android::hardware::graphics::common::V1_2::PixelFormat;
-using IMapper_4_0_Error =  ::android::hardware::graphics::mapper::V4_0::Error;
 
 static BufferInfo GetBufferInfo(const BufferDescriptor &descriptor) {
   return BufferInfo(descriptor.GetWidth(), descriptor.GetHeight(), descriptor.GetFormat(),
@@ -100,26 +62,19 @@ static uint64_t getMetaDataSize(uint64_t reserved_region_size) {
 #ifndef METADATA_V2
   reserved_region_size = 0;
 #endif
-  return static_cast<uint64_t>(ROUND_UP_PAGESIZE(sizeof(MetaData_t) + reserved_region_size));
+  return static_cast<uint64_t>(ROUND_UP_PAGESIZE(sizeof(MetaData_t) +
+                               static_cast<uint32_t>(reserved_region_size)));
 }
 
-#ifdef GRALLOC_HANDLE_HAS_RESERVED_SIZE
-static void unmapAndReset(private_handle_t *handle) {
-  uint64_t reserved_region_size = handle->reserved_size;
-#else
 static void unmapAndReset(private_handle_t *handle, uint64_t reserved_region_size = 0) {
-#endif
   if (private_handle_t::validate(handle) == 0 && handle->base_metadata) {
-    munmap(reinterpret_cast<void *>(handle->base_metadata), getMetaDataSize(reserved_region_size));
+    munmap(reinterpret_cast<void *>(handle->base_metadata),
+           static_cast<uint32_t>(getMetaDataSize(reserved_region_size)));
     handle->base_metadata = 0;
   }
 }
 
-#ifdef GRALLOC_HANDLE_HAS_RESERVED_SIZE
-static int validateAndMap(private_handle_t *handle) {
-#else
 static int validateAndMap(private_handle_t *handle, uint64_t reserved_region_size = 0) {
-#endif
   if (private_handle_t::validate(handle)) {
     ALOGE("%s: Private handle is invalid - handle:%p", __func__, handle);
     return -1;
@@ -130,18 +85,15 @@ static int validateAndMap(private_handle_t *handle, uint64_t reserved_region_siz
   }
 
   if (!handle->base_metadata) {
-#ifdef GRALLOC_HANDLE_HAS_RESERVED_SIZE
-    uint64_t reserved_region_size = handle->reserved_size;
-#endif
     uint64_t size = getMetaDataSize(reserved_region_size);
-    void *base = mmap(NULL, size, PROT_READ | PROT_WRITE, MAP_SHARED, handle->fd_metadata, 0);
+    void *base = mmap(NULL, static_cast<uint32_t>(size), PROT_READ | PROT_WRITE,
+                      MAP_SHARED, handle->fd_metadata, 0);
     if (base == reinterpret_cast<void *>(MAP_FAILED)) {
       ALOGE("%s: metadata mmap failed - handle:%p fd: %d err: %s", __func__, handle,
             handle->fd_metadata, strerror(errno));
       return -1;
     }
     handle->base_metadata = (uintptr_t)base;
-#ifndef GRALLOC_HANDLE_HAS_RESERVED_SIZE
 #ifdef METADATA_V2
     // The allocator process gets the reserved region size from the BufferDescriptor.
     // When importing to another process, the reserved size is unknown until mapping the metadata,
@@ -150,7 +102,7 @@ static int validateAndMap(private_handle_t *handle, uint64_t reserved_region_siz
     if (reserved_region_size == 0 && metadata->reservedSize) {
       size = getMetaDataSize(metadata->reservedSize);
       unmapAndReset(handle);
-      void *new_base = mmap(NULL, size, PROT_READ | PROT_WRITE, MAP_SHARED, handle->fd_metadata, 0);
+      void *new_base = mmap(NULL, static_cast<uint32_t>(size), PROT_READ | PROT_WRITE, MAP_SHARED, handle->fd_metadata, 0);
       if (new_base == reinterpret_cast<void *>(MAP_FAILED)) {
         ALOGE("%s: metadata mmap failed - handle:%p fd: %d err: %s", __func__, handle,
               handle->fd_metadata, strerror(errno));
@@ -158,7 +110,6 @@ static int validateAndMap(private_handle_t *handle, uint64_t reserved_region_siz
       }
       handle->base_metadata = (uintptr_t)new_base;
     }
-#endif
 #endif
   }
   return 0;
@@ -607,19 +558,15 @@ static Error getComponentSizeAndOffset(int32_t format, PlaneLayoutComponent &com
       }
       break;
     case static_cast<int32_t>(HAL_PIXEL_FORMAT_YCbCr_420_P010):
-    case static_cast<int32_t>(HAL_PIXEL_FORMAT_YCbCr_420_P010_VENUS):
       if (comp.type.value == android::gralloc4::PlaneLayoutComponentType_Y.value ||
-          comp.type.value == android::gralloc4::PlaneLayoutComponentType_CB.value) {
-        comp.offsetInBits = 6;
-        comp.sizeInBits = 10;
-      } else if (comp.type.value == android::gralloc4::PlaneLayoutComponentType_CR.value) {
-        comp.offsetInBits = 22;
+          comp.type.value == android::gralloc4::PlaneLayoutComponentType_CB.value ||
+          comp.type.value == android::gralloc4::PlaneLayoutComponentType_CR.value) {
+        comp.offsetInBits = 0;
         comp.sizeInBits = 10;
       } else {
         return Error::BAD_VALUE;
       }
       break;
-
     case static_cast<int32_t>(HAL_PIXEL_FORMAT_RAW16):
       if (comp.type.value == android::gralloc4::PlaneLayoutComponentType_RAW.value) {
         comp.offsetInBits = 0;
@@ -778,19 +725,16 @@ Error BufferManager::FreeBuffer(std::shared_ptr<Buffer> buf) {
     return Error::BAD_BUFFER;
   }
 
-#ifdef GRALLOC_HANDLE_HAS_RESERVED_SIZE
-  auto meta_size = getMetaDataSize(hnd->reserved_size);
-#else
   auto meta_size = getMetaDataSize(buf->reserved_size);
-#endif
 
   if (allocator_->FreeBuffer(reinterpret_cast<void *>(hnd->base), hnd->size, hnd->offset, hnd->fd,
                              buf->ion_handle_main) != 0) {
     return Error::BAD_BUFFER;
   }
 
-  if (allocator_->FreeBuffer(reinterpret_cast<void *>(hnd->base_metadata), meta_size,
-                             hnd->offset_metadata, hnd->fd_metadata, buf->ion_handle_meta) != 0) {
+  if (allocator_->FreeBuffer(reinterpret_cast<void *>(hnd->base_metadata),
+                             static_cast<uint32_t>(meta_size), hnd->offset_metadata,
+                             hnd->fd_metadata, buf->ion_handle_meta) != 0) {
     return Error::BAD_BUFFER;
   }
 
@@ -822,15 +766,9 @@ void BufferManager::RegisterHandleLocked(const private_handle_t *hnd, int ion_ha
   auto buffer = std::make_shared<Buffer>(hnd, ion_handle, ion_handle_meta);
 
   if (hnd->base_metadata) {
-#ifndef GRALLOC_HANDLE_HAS_RESERVED_SIZE
     auto metadata = reinterpret_cast<MetaData_t *>(hnd->base_metadata);
-#endif
 #ifdef METADATA_V2
-#ifdef GRALLOC_HANDLE_HAS_RESERVED_SIZE
-    buffer->reserved_size = hnd->reserved_size;
-#else
     buffer->reserved_size = metadata->reservedSize;
-#endif
     if (buffer->reserved_size > 0) {
       buffer->reserved_region_ptr =
           reinterpret_cast<void *>(hnd->base_metadata + sizeof(MetaData_t));
@@ -877,11 +815,6 @@ Error BufferManager::ImportHandleLocked(private_handle_t *hnd) {
   }
 
   RegisterHandleLocked(hnd, ion_handle, ion_handle_meta);
-  allocated_ += hnd->size;
-  if (allocated_ >=  kAllocThreshold) {
-    kAllocThreshold += kMemoryOffset;
-    BuffersDump();
-  }
   return Error::NONE;
 }
 
@@ -941,9 +874,6 @@ Error BufferManager::ReleaseBuffer(private_handle_t const *hnd) {
     if (buf->DecRef()) {
       handles_map_.erase(hnd);
       // Unmap, close ion handle and close fd
-      if (allocated_ >= hnd->size) {
-        allocated_ -= hnd->size;
-      }
       FreeBuffer(buf);
     }
   }
@@ -1060,6 +990,11 @@ Error BufferManager::AllocateBuffer(const BufferDescriptor &descriptor, buffer_h
     return Error::BAD_BUFFER;
   std::lock_guard<std::mutex> buffer_lock(buffer_lock_);
 
+  uint64_t reserved_size = descriptor.GetReservedSize();
+  if (reserved_size + sizeof(MetaData_t) + getpagesize() >= UINT32_MAX) {
+    return Error::UNSUPPORTED;
+  }
+
   uint64_t usage = descriptor.GetUsage();
   int format = GetImplDefinedFormat(usage, descriptor.GetFormat());
   uint32_t layer_count = descriptor.GetLayerCount();
@@ -1080,9 +1015,6 @@ Error BufferManager::AllocateBuffer(const BufferDescriptor &descriptor, buffer_h
   }
 
   if (testAlloc) {
-    if (size == 0) {
-       return Error::NO_RESOURCES;
-    }
     return Error::NONE;
   }
 
@@ -1123,9 +1055,6 @@ Error BufferManager::AllocateBuffer(const BufferDescriptor &descriptor, buffer_h
       data.fd, e_data.fd, INT(flags), INT(alignedw), INT(alignedh), descriptor.GetWidth(),
       descriptor.GetHeight(), format, buffer_type, data.size, usage);
 
-#ifdef GRALLOC_HANDLE_HAS_RESERVED_SIZE
-  hnd->reserved_size = descriptor.GetReservedSize();
-#endif
   hnd->id = ++next_id_;
   hnd->base = 0;
   hnd->base_metadata = 0;
@@ -1136,8 +1065,7 @@ Error BufferManager::AllocateBuffer(const BufferDescriptor &descriptor, buffer_h
     setMetaDataAndUnmap(hnd, SET_GRAPHICS_METADATA, reinterpret_cast<void *>(&graphics_metadata));
   }
 
-
-#if !defined(GRALLOC_HANDLE_HAS_RESERVED_SIZE) && defined(METADATA_V2)
+#ifdef METADATA_V2
   auto error = validateAndMap(hnd, descriptor.GetReservedSize());
 #else
   auto error = validateAndMap(hnd);
@@ -1156,18 +1084,14 @@ Error BufferManager::AllocateBuffer(const BufferDescriptor &descriptor, buffer_h
   metadata->reservedSize = descriptor.GetReservedSize();
 #else
   metadata->reservedRegion.size =
-      std::min(descriptor.GetReservedSize(), (uint64_t)RESERVED_REGION_SIZE);
+     static_cast<uint32_t>(std::min(descriptor.GetReservedSize(), (uint64_t)RESERVED_REGION_SIZE));
 #endif
   metadata->crop.top = 0;
   metadata->crop.left = 0;
   metadata->crop.right = hnd->width;
   metadata->crop.bottom = hnd->height;
 
-#ifdef GRALLOC_HANDLE_HAS_RESERVED_SIZE
-  unmapAndReset(hnd);
-#else
   unmapAndReset(hnd, descriptor.GetReservedSize());
-#endif
 
   *handle = hnd;
 
@@ -1177,46 +1101,6 @@ Error BufferManager::AllocateBuffer(const BufferDescriptor &descriptor, buffer_h
     private_handle_t::Dump(hnd);
   }
   return Error::NONE;
-}
-
-void BufferManager:: BuffersDump() {
-  char timeStamp[32];
-  char hms[32];
-  uint64_t millis;
-  struct timeval tv;
-  struct tm ptm;
-
-  gettimeofday(&tv, NULL);
-  localtime_r(&tv.tv_sec, &ptm);
-  strftime (hms, sizeof (hms), "%H:%M:%S", &ptm);
-  millis = tv.tv_usec / 1000;
-  snprintf(timeStamp, sizeof(timeStamp), "Timestamp: %s.%03" PRIu64, hms, millis);
-
-  std::fstream fs;
-  fs.open(file_dump_.kDumpFile, std::ios::app);
-  if (!fs) {
-    return;
-  }
-  fs << "============================" << std::endl;
-  fs << timeStamp << std::endl;
-  fs << "Total layers = " << handles_map_.size() << std::endl;
-  uint64_t totalAllocationSize = 0;
-  for (auto it : handles_map_) {
-    auto buf = it.second;
-    auto hnd = buf->handle;
-    auto metadata = reinterpret_cast<MetaData_t *>(hnd->base_metadata);
-    fs  << std::setw(80) << "Client:" << (metadata ? metadata->name: "No name");
-    fs  << std::setw(20) << "WxH:" << std::setw(4) << hnd->width << " x "
-        << std::setw(4) << hnd->height;
-    fs  << std::setw(20) << "Size: " << std::setw(9) << hnd->size <<  std::endl;
-    totalAllocationSize += hnd->size;
-  }
-  fs << "Total allocation  = " << totalAllocationSize/1024 << "KiB" << std::endl;
-  file_dump_.position = fs.tellp();
-  if (file_dump_.position > (20 * 1024 * 1024)) {
-    file_dump_.position = 0;
-  }
-  fs.close();
 }
 
 Error BufferManager::Dump(std::ostringstream *os) {
@@ -1580,9 +1464,7 @@ Error BufferManager::SetMetadata(private_handle_t *handle, int64_t metadatatype_
       return Error::UNSUPPORTED;
     case (int64_t)StandardMetadataType::DATASPACE:
       Dataspace dataspace;
-      if (android::gralloc4::decodeDataspace(in, &dataspace)) {
-        return Error::UNSUPPORTED;
-      }
+      android::gralloc4::decodeDataspace(in, &dataspace);
       dataspaceToColorMetadata(dataspace, &metadata->color);
       break;
     case (int64_t)StandardMetadataType::BLEND_MODE:
@@ -1592,9 +1474,7 @@ Error BufferManager::SetMetadata(private_handle_t *handle, int64_t metadatatype_
       break;
     case (int64_t)StandardMetadataType::SMPTE2086: {
       std::optional<Smpte2086> mastering_display_values;
-      if (android::gralloc4::decodeSmpte2086(in, &mastering_display_values)) {
-        return Error::UNSUPPORTED;
-      }
+      android::gralloc4::decodeSmpte2086(in, &mastering_display_values);
       if (mastering_display_values != std::nullopt) {
         metadata->color.masteringDisplayInfo.colorVolumeSEIEnabled = true;
 
@@ -1633,9 +1513,7 @@ Error BufferManager::SetMetadata(private_handle_t *handle, int64_t metadatatype_
     }
     case (int64_t)StandardMetadataType::CTA861_3: {
       std::optional<Cta861_3> content_light_level;
-      if (android::gralloc4::decodeCta861_3(in, &content_light_level)) {
-        return Error::UNSUPPORTED;
-      }
+      android::gralloc4::decodeCta861_3(in, &content_light_level);
       if (content_light_level != std::nullopt) {
         metadata->color.contentLightLevel.lightLevelSEIEnabled = true;
         metadata->color.contentLightLevel.maxContentLightLevel =
@@ -1653,14 +1531,12 @@ Error BufferManager::SetMetadata(private_handle_t *handle, int64_t metadatatype_
     }
     case (int64_t)StandardMetadataType::SMPTE2094_40: {
       std::optional<std::vector<uint8_t>> dynamic_metadata_payload;
-      if (android::gralloc4::decodeSmpte2094_40(in, &dynamic_metadata_payload)) {
-        return Error::UNSUPPORTED;
-      }
+      android::gralloc4::decodeSmpte2094_40(in, &dynamic_metadata_payload);
       if (dynamic_metadata_payload != std::nullopt) {
         if (dynamic_metadata_payload->size() > HDR_DYNAMIC_META_DATA_SZ)
           return Error::BAD_VALUE;
 
-        metadata->color.dynamicMetaDataLen = dynamic_metadata_payload->size();
+        metadata->color.dynamicMetaDataLen = static_cast<uint32_t>(dynamic_metadata_payload->size());
         std::copy(dynamic_metadata_payload->begin(), dynamic_metadata_payload->end(),
                   metadata->color.dynamicMetaDataPayload);
         metadata->color.dynamicMetaDataValid = true;
@@ -1676,13 +1552,9 @@ Error BufferManager::SetMetadata(private_handle_t *handle, int64_t metadatatype_
     }
     case (int64_t)StandardMetadataType::CROP: {
       std::vector<Rect> in_crop;
-      if (android::gralloc4::decodeCrop(in, &in_crop)) {
+      android::gralloc4::decodeCrop(in, &in_crop);
+      if (in_crop.size() != 1)
         return Error::UNSUPPORTED;
-      }
-
-      if (in_crop.size() != 1) {
-        return Error::UNSUPPORTED;
-      }
 
       metadata->crop.left = in_crop[0].left;
       metadata->crop.top = in_crop[0].top;
@@ -1691,75 +1563,49 @@ Error BufferManager::SetMetadata(private_handle_t *handle, int64_t metadatatype_
       break;
     }
     case QTI_VT_TIMESTAMP:
-      if (android::gralloc4::decodeUint64(qtigralloc::MetadataType_VTTimestamp, in,
-                                      &metadata->vtTimeStamp)) {
-        return Error::UNSUPPORTED;
-      }
+      android::gralloc4::decodeUint64(qtigralloc::MetadataType_VTTimestamp, in,
+                                      &metadata->vtTimeStamp);
       break;
     case QTI_COLOR_METADATA:
       ColorMetaData color;
-      if (qtigralloc::decodeColorMetadata(in, &color) != IMapper_4_0_Error::NONE) {
-        return Error::UNSUPPORTED;
-      }
+      qtigralloc::decodeColorMetadata(in, &color);
       metadata->color = color;
       break;
     case QTI_PP_PARAM_INTERLACED:
-      if (android::gralloc4::decodeInt32(qtigralloc::MetadataType_PPParamInterlaced, in,
-                                     &metadata->interlaced)) {
-        return Error::UNSUPPORTED;
-      }
+      android::gralloc4::decodeInt32(qtigralloc::MetadataType_PPParamInterlaced, in,
+                                     &metadata->interlaced);
       break;
     case QTI_VIDEO_PERF_MODE:
-      if (android::gralloc4::decodeUint32(qtigralloc::MetadataType_VideoPerfMode, in,
-                                      &metadata->isVideoPerfMode)) {
-        return Error::UNSUPPORTED;
-      }
+      android::gralloc4::decodeUint32(qtigralloc::MetadataType_VideoPerfMode, in,
+                                      &metadata->isVideoPerfMode);
       break;
     case QTI_GRAPHICS_METADATA:
-      if (qtigralloc::decodeGraphicsMetadata(in, &metadata->graphics_metadata) !=
-                                       IMapper_4_0_Error::NONE) {
-        return Error::UNSUPPORTED;
-      }
+      qtigralloc::decodeGraphicsMetadata(in, &metadata->graphics_metadata);
       break;
     case QTI_UBWC_CR_STATS_INFO:
-      if (qtigralloc::decodeUBWCStats(in, &metadata->ubwcCRStats[0]) != IMapper_4_0_Error::NONE) {
-        return Error::UNSUPPORTED;
-      }
+      qtigralloc::decodeUBWCStats(in, &metadata->ubwcCRStats[0]);
       break;
     case QTI_REFRESH_RATE:
-      if (android::gralloc4::decodeFloat(qtigralloc::MetadataType_RefreshRate, in,
-                                     &metadata->refreshrate)) {
-        return Error::UNSUPPORTED;
-      }
+      android::gralloc4::decodeFloat(qtigralloc::MetadataType_RefreshRate, in,
+                                     &metadata->refreshrate);
       break;
     case QTI_MAP_SECURE_BUFFER:
-      if (android::gralloc4::decodeInt32(qtigralloc::MetadataType_MapSecureBuffer, in,
-                                     &metadata->mapSecureBuffer)) {
-        return Error::UNSUPPORTED;
-      }
+      android::gralloc4::decodeInt32(qtigralloc::MetadataType_MapSecureBuffer, in,
+                                     &metadata->mapSecureBuffer);
       break;
     case QTI_LINEAR_FORMAT:
-      if (android::gralloc4::decodeUint32(qtigralloc::MetadataType_LinearFormat, in,
-                                      &metadata->linearFormat)) {
-        return Error::UNSUPPORTED;
-      }
+      android::gralloc4::decodeUint32(qtigralloc::MetadataType_LinearFormat, in,
+                                      &metadata->linearFormat);
       break;
     case QTI_SINGLE_BUFFER_MODE:
-      if (android::gralloc4::decodeUint32(qtigralloc::MetadataType_SingleBufferMode, in,
-                                      &metadata->isSingleBufferMode)) {
-        return Error::UNSUPPORTED;
-      }
+      android::gralloc4::decodeUint32(qtigralloc::MetadataType_SingleBufferMode, in,
+                                      &metadata->isSingleBufferMode);
       break;
     case QTI_CVP_METADATA:
-      if (qtigralloc::decodeCVPMetadata(in, &metadata->cvpMetadata) != IMapper_4_0_Error::NONE) {
-        return Error::UNSUPPORTED;
-      }
+      qtigralloc::decodeCVPMetadata(in, &metadata->cvpMetadata);
       break;
     case QTI_VIDEO_HISTOGRAM_STATS:
-      if (qtigralloc::decodeVideoHistogramMetadata(in, &metadata->video_histogram_stats) !=
-                                      IMapper_4_0_Error::NONE) {
-        return Error::UNSUPPORTED;
-      }
+      qtigralloc::decodeVideoHistogramMetadata(in, &metadata->video_histogram_stats);
       break;
     default:
 #ifdef METADATA_V2

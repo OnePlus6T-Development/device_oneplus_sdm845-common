@@ -1,5 +1,5 @@
 /*
-* Copyright (c) 2014 - 2016, 2018 - 2019 The Linux Foundation. All rights reserved.
+* Copyright (c) 2014 - 2016, 2018 The Linux Foundation. All rights reserved.
 *
 * Redistribution and use in source and binary forms, with or without
 * modification, are permitted provided that the following conditions are
@@ -80,8 +80,10 @@ namespace sdm {
   @sa DisplayInterface::SetMaxBandwidthMode
 */
 enum HWBwModes {
-  kBwVFEOff,       //!< Camera/video front end off. No change in device bandwidth limit.
-  kBwVFEOn,        //!< Camera/video front end is on. Bandwidth limit reduced.
+  kBwDefault,      //!< Default state. No change in device bandwidth limit.
+  kBwCamera,       //!< Camera is on. Bandwidth limit should be reduced accordingly.
+  kBwVFlip,        //!< VFlip is required. Reduce bandwidth limit accordingly.
+  kBwHFlip,        //!< HFlip is required.  Reduce bandwidth limit accordingly.
   kBwModeMax,      //!< Limiter for maximum available bandwidth modes.
 };
 
@@ -257,14 +259,6 @@ class CoreInterface {
     @return \link DisplayError \endlink
   */
   virtual DisplayError GetMaxDisplaysSupported(DisplayType type, int32_t *max_displays) = 0;
-
-  /*! @brief Method which returns true if the given format is supported by rotator otherwise false
-
-    @param[in] \link LayerBufferFormat \endlink
-
-    @return returns true if the given format is supported by rotator otherwise false
-  */
-  virtual bool IsRotatorSupportedFormat(LayerBufferFormat format) = 0;
 
  protected:
   virtual ~CoreInterface() { }

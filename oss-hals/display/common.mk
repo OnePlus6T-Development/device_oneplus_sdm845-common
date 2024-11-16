@@ -3,18 +3,15 @@ display_top := $(call my-dir)
 
 #Common C flags
 common_flags := -Wno-missing-field-initializers
-common_flags += -Wall -Werror
+common_flags += -Wconversion -Wall -Werror -Wno-sign-conversion
 common_flags += -DUSE_GRALLOC1
 ifeq ($(TARGET_IS_HEADLESS), true)
     common_flags += -DTARGET_HEADLESS
+    LOCAL_CLANG := false
 endif
 
 ifeq ($(TARGET_USES_COLOR_METADATA), true)
     common_flags += -DUSE_COLOR_METADATA
-endif
-
-ifeq ($(TARGET_USES_5.4_KERNEL),true)
-    common_flags += -DKERNEL_5_4
 endif
 
 ifeq ($(TARGET_USES_QCOM_BSP),true)
@@ -59,9 +56,6 @@ ifeq ($(TARGET_COMPILE_WITH_MSM_KERNEL),true)
 # If the macro is not present, the headers are picked from hardware/qcom/msmXXXX
 # failing which, they are picked from bionic.
     common_deps += $(TARGET_OUT_INTERMEDIATES)/KERNEL_OBJ/usr
-    kernel_includes += $(TARGET_OUT_INTERMEDIATES)/KERNEL_OBJ/usr/include
-ifeq ($(TARGET_USES_5.4_KERNEL), true)
-    kernel_includes += $(TARGET_OUT_INTERMEDIATES)/KERNEL_OBJ/usr/include/display
-    kernel_includes += $(TARGET_OUT_INTERMEDIATES)/KERNEL_OBJ/usr/include/vidc
-endif
+    kernel_includes += $(TARGET_OUT_INTERMEDIATES)/KERNEL_OBJ/usr/include \
+                       $(TARGET_OUT_INTERMEDIATES)/KERNEL_OBJ/usr/include/display
 endif

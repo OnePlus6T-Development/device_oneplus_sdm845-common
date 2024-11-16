@@ -1,6 +1,6 @@
 /*
  * Copyright (C) 2010 The Android Open Source Project
- * Copyright (C) 2012-2014, 2016-2019, 2021, The Linux Foundation. All rights reserved.
+ * Copyright (C) 2012-2014, 2016-2019 The Linux Foundation. All rights reserved.
  *
  * Not a Contribution, Apache license notifications and license are
  * retained for attribution purposes only.
@@ -17,42 +17,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
-/*
-* Changes from Qualcomm Innovation Center are provided under the following license:
-*
-* Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
-*
-* Redistribution and use in source and binary forms, with or without
-* modification, are permitted (subject to the limitations in the
-* disclaimer below) provided that the following conditions are met:
-*
-*    * Redistributions of source code must retain the above copyright
-*      notice, this list of conditions and the following disclaimer.
-*
-*    * Redistributions in binary form must reproduce the above
-*      copyright notice, this list of conditions and the following
-*      disclaimer in the documentation and/or other materials provided
-*      with the distribution.
-*
-*    * Neither the name of Qualcomm Innovation Center, Inc. nor the names of its
-*      contributors may be used to endorse or promote products derived
-*      from this software without specific prior written permission.
-*
-* NO EXPRESS OR IMPLIED LICENSES TO ANY PARTY'S PATENT RIGHTS ARE
-* GRANTED BY THIS LICENSE. THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT
-* HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED
-* WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF
-* MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED.
-* IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR
-* ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
-* DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE
-* GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-* INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER
-* IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR
-* OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
-* IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-*/
 
 #ifndef ANDROID_IQSERVICE_H
 #define ANDROID_IQSERVICE_H
@@ -75,50 +39,54 @@ class IQService : public android::IInterface
 public:
     DECLARE_META_INTERFACE(QService);
     enum {
-      COMMAND_LIST_START = android::IBinder::FIRST_CALL_TRANSACTION,
-      GET_PANEL_BRIGHTNESS = 2,                // Provides ability to set the panel brightness
-      SET_PANEL_BRIGHTNESS = 3,                // Provides ability to get the panel brightness
-      CONNECT_HWC_CLIENT = 4,                  // Connect to qservice
-      SCREEN_REFRESH = 5,                      // Refresh screen through SF invalidate
-      GET_DISPLAY_VISIBLE_REGION = 11,         // Get the visibleRegion for dpy
-      SET_SECONDARY_DISPLAY_STATUS = 12,       // Sets secondary display status
-      SET_MAX_PIPES_PER_MIXER = 13,            // Set max pipes per mixer for MDPComp
-      DYNAMIC_DEBUG = 15,                      // Enable more logging on the fly
-      SET_IDLE_TIMEOUT = 16,                   // Set idle timeout for GPU fallback
-      CONFIGURE_DYN_REFRESH_RATE = 18,         //  Enable/Disable/Set refresh rate dynamically
-      CONTROL_PARTIAL_UPDATE = 19,             // Provides ability to enable/disable partial update
-      TOGGLE_SCREEN_UPDATES = 20,              // Provides ability to set the panel brightness
-      SET_FRAME_DUMP_CONFIG = 21,              // Provides ability to set the frame dump config
-      CONNECT_HDMI_CLIENT = 23,                // Connect HDMI CEC HAL Client
-      QDCM_SVC_CMDS = 24,                      // request QDCM services.
-      SET_ACTIVE_CONFIG = 25,                  // Set a specified display config
-      GET_ACTIVE_CONFIG = 26,                  // Get the current config index
-      GET_CONFIG_COUNT = 27,                   // Get the number of supported display configs
-      GET_DISPLAY_ATTRIBUTES_FOR_CONFIG = 28,  // Get attr for specified config
-      SET_DISPLAY_MODE = 29,                   // Set display mode to command or video mode
-      SET_CAMERA_STATUS = 30,                  // To notify display when camera is on and off
-      MIN_HDCP_ENCRYPTION_LEVEL_CHANGED = 31,
-      GET_BW_TRANSACTION_STATUS = 32,   // Client can query BW transaction status.
-      SET_LAYER_MIXER_RESOLUTION = 33,  // Enables client to set layer mixer resolution.
-      SET_COLOR_MODE = 34,              // Overrides the QDCM mode on the display
-      SET_COLOR_MODE_BY_ID = 36,        // Overrides the QDCM mode using the given mode ID
-      GET_COMPOSER_STATUS = 37,  // Get composer init status-true if primary display init is done
-      SET_QSYNC_MODE = 38,       // Set qsync mode. 0 - (none)disable qsync, 1 - continuous mode.
-      SET_COLOR_MODE_WITH_RENDER_INTENT = 39,  // Overrides the QDCM mode with render intent
-      SET_IDLE_PC = 40,                        // Enable/disable Idle power collapse
-      SET_DPPS_AD4_ROI_CONFIG = 41,            // Set ad4 roi config for debug
-      SET_DSI_CLK = 42,                        // Set DSI Clk.
-      GET_DSI_CLK = 43,                        // Get DSI Clk.
-      GET_SUPPORTED_DSI_CLK = 44,              // Get supported DSI Clk.
-      SET_COLOR_MODE_FROM_CLIENT = 45,         // Overrides the QDCM mode using the given mode ID
-      SET_FRAME_TRIGGER_MODE = 46,             // Set frame trigger mode for debug
-      SET_PANEL_LUMINANCE = 47,                // Set Panel Luminance attributes.
-      SET_BRIGHTNESS_SCALE = 48,               // Set brightness scale ratio
-      SET_COLOR_SAMPLING_ENABLED = 49,         // Toggle the collection of display color stats
-      SET_STAND_BY_MODE = 50,                  // Set stand by mode for MDP hardware
-      GET_PANEL_RESOLUTION = 51,               // Get Panel Resolution
-      DELAY_FIRST_COMMIT = 52,                 // Delay first commit when PowerOn
-      COMMAND_LIST_END = 400,
+        COMMAND_LIST_START = android::IBinder::FIRST_CALL_TRANSACTION,
+        GET_PANEL_BRIGHTNESS = 2, // Provides ability to set the panel brightness
+        SET_PANEL_BRIGHTNESS = 3, // Provides ability to get the panel brightness
+        CONNECT_HWC_CLIENT = 4, // Connect to qservice
+        SCREEN_REFRESH = 5,     // Refresh screen through SF invalidate
+        EXTERNAL_ORIENTATION = 6,// Set external orientation
+        BUFFER_MIRRORMODE = 7,  // Buffer mirrormode
+        CHECK_EXTERNAL_STATUS = 8,// Check status of external display
+        GET_DISPLAY_ATTRIBUTES = 9,// Get display attributes
+        SET_HSIC_DATA = 10,     // Set HSIC on dspp
+        GET_DISPLAY_VISIBLE_REGION = 11,// Get the visibleRegion for dpy
+        SET_SECONDARY_DISPLAY_STATUS = 12,// Sets secondary display status
+        SET_MAX_PIPES_PER_MIXER = 13,// Set max pipes per mixer for MDPComp
+        SET_VIEW_FRAME = 14,    // Set view frame of display
+        DYNAMIC_DEBUG = 15,     // Enable more logging on the fly
+        SET_IDLE_TIMEOUT = 16,  // Set idle timeout for GPU fallback
+        TOGGLE_BWC = 17,           // Toggle BWC On/Off on targets that support
+        /* Enable/Disable/Set refresh rate dynamically */
+        CONFIGURE_DYN_REFRESH_RATE = 18,
+        CONTROL_PARTIAL_UPDATE = 19,   // Provides ability to enable/disable partial update
+        TOGGLE_SCREEN_UPDATES = 20, // Provides ability to pause/resume display updates
+        SET_FRAME_DUMP_CONFIG = 21,  // Provides ability to set the frame dump config
+        SET_S3D_MODE = 22, // Set the 3D mode as specified in msm_hdmi_modes.h
+        CONNECT_HDMI_CLIENT = 23,  // Connect HDMI CEC HAL Client
+        QDCM_SVC_CMDS = 24,        // request QDCM services.
+        SET_ACTIVE_CONFIG = 25, //Set a specified display config
+        GET_ACTIVE_CONFIG = 26, //Get the current config index
+        GET_CONFIG_COUNT = 27, //Get the number of supported display configs
+        GET_DISPLAY_ATTRIBUTES_FOR_CONFIG = 28, //Get attr for specified config
+        SET_DISPLAY_MODE = 29, // Set display mode to command or video mode
+        SET_CAMERA_STATUS = 30, // To notify display when camera is on and off
+        MIN_HDCP_ENCRYPTION_LEVEL_CHANGED = 31,
+        GET_BW_TRANSACTION_STATUS = 32, //Client can query BW transaction status.
+        SET_LAYER_MIXER_RESOLUTION = 33, // Enables client to set layer mixer resolution.
+        SET_COLOR_MODE = 34, // Overrides the QDCM mode on the display
+        GET_HDR_CAPABILITIES = 35, // Get HDR capabilities for legacy HWC interface
+        SET_COLOR_MODE_BY_ID = 36, // Overrides the QDCM mode using the given mode ID
+        GET_COMPOSER_STATUS = 37, // Get composer init status-true if primary display init is done
+        SET_QSYNC_MODE = 38, // Set qsync mode. 0 - (none)disable qsync, 1 - continuous mode.
+        SET_COLOR_MODE_WITH_RENDER_INTENT = 39,
+        SET_IDLE_PC = 40, // Enable/disable Idle power collapse
+        SET_DPPS_AD4_ROI_CONFIG = 41, // Set ad4 roi config for debug
+        SET_DSI_CLK = 42, // Set DSI Clk.
+        GET_DSI_CLK = 43, // Get DSI Clk.
+        GET_SUPPORTED_DSI_CLK = 44, // Get supported DSI Clk.
+        SET_COLOR_MODE_FROM_CLIENT = 45, // Overrides the QDCM mode using the given mode ID
+        SET_PANEL_LUMINANCE = 46, // Set Panel Luminance attributes.
+        COMMAND_LIST_END = 400,
     };
 
     enum {

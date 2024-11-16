@@ -1,20 +1,10 @@
 # Gralloc module
 LOCAL_PATH := $(call my-dir)
-
-qmaa_flags := ""
-ifeq ($(TARGET_USES_QMAA),true)
-ifeq ($(TARGET_USES_QMAA_OVERRIDE_DISPLAY),false)
-qmaa_flags := -DQMAA -Wno-unused-parameter -Wno-unused-variable
-qmaa_flags += -DTARGET_ION_ABI_VERSION=2
-endif
-endif
-
 include $(LOCAL_PATH)/../common.mk
 include $(LIBION_HEADER_PATH_WRAPPER)
 include $(CLEAR_VARS)
 
 LOCAL_MODULE                  := gralloc.$(TARGET_BOARD_PLATFORM)
-LOCAL_SANITIZE                := integer_overflow
 LOCAL_VENDOR_MODULE           := true
 LOCAL_MODULE_RELATIVE_PATH    := hw
 LOCAL_MODULE_TAGS             := optional
@@ -27,7 +17,7 @@ LOCAL_SHARED_LIBRARIES        := $(common_libs) libqdMetaData libsync libgralloc
                                  android.hardware.graphics.mapper@2.1 \
                                  android.hardware.graphics.mapper@3.0 \
                                  android.hardware.graphics.mapper@4.0
-LOCAL_CFLAGS                  := $(common_flags) $(qmaa_flags) -DLOG_TAG=\"qdgralloc\" -Wall -Werror \
+LOCAL_CFLAGS                  := $(common_flags) -DLOG_TAG=\"qdgralloc\" -Wall -Werror \
                                  -D__QTI_DISPLAY_GRALLOC__
 LOCAL_CLANG                   := true
 LOCAL_ADDITIONAL_DEPENDENCIES := $(common_deps)
@@ -38,7 +28,6 @@ include $(BUILD_SHARED_LIBRARY)
 include $(CLEAR_VARS)
 LOCAL_MODULE                  := libgrallocutils
 LOCAL_VENDOR_MODULE           := true
-LOCAL_SANITIZE                := integer_overflow
 LOCAL_MODULE_TAGS             := optional
 LOCAL_C_INCLUDES              := $(common_includes) $(kernel_includes)
 LOCAL_HEADER_LIBRARIES        := display_headers
@@ -48,7 +37,7 @@ LOCAL_SHARED_LIBRARIES        := $(common_libs) libqdMetaData libdl  \
                                   android.hardware.graphics.mapper@2.1 \
                                   android.hardware.graphics.mapper@3.0 \
                                   android.hardware.graphics.mapper@4.0
-LOCAL_CFLAGS                  := $(common_flags) $(qmaa_flags) -DLOG_TAG=\"qdgralloc\" -Wno-sign-conversion \
+LOCAL_CFLAGS                  := $(common_flags) -DLOG_TAG=\"qdgralloc\" -Wno-sign-conversion \
                                  -D__QTI_DISPLAY_GRALLOC__
 
 ifeq ($(TARGET_USES_YCRCB_CAMERA_PREVIEW),true)
@@ -57,18 +46,20 @@ else ifeq ($(TARGET_USES_YCRCB_VENUS_CAMERA_PREVIEW),true)
     LOCAL_CFLAGS              += -DUSE_YCRCB_CAMERA_PREVIEW_VENUS
 endif
 
-ifeq ($(TARGET_NO_RAW10_CUSTOM_FORMAT),true)
-    LOCAL_CFLAGS              += -DNO_RAW10_CUSTOM_FORMAT
+ifeq ($(TARGET_USES_UNALIGNED_NV21_ZSL),true)
+    LOCAL_CFLAGS              += -DUSE_UNALIGNED_NV21_ZSL
+endif
+ifeq ($(TARGET_USES_UNALIGNED_YCRCB),true)
+    LOCAL_CFLAGS              += -DUSE_UNALIGNED_YCRCB
 endif
 
 LOCAL_ADDITIONAL_DEPENDENCIES := $(common_deps)
-LOCAL_SRC_FILES               := gr_utils.cpp gr_adreno_info.cpp gr_camera_info.cpp
+LOCAL_SRC_FILES               := gr_utils.cpp gr_adreno_info.cpp
 include $(BUILD_SHARED_LIBRARY)
 
 #libgralloccore
 include $(CLEAR_VARS)
 LOCAL_MODULE                  := libgralloccore
-LOCAL_SANITIZE                := integer_overflow
 LOCAL_VENDOR_MODULE           := true
 LOCAL_MODULE_TAGS             := optional
 LOCAL_C_INCLUDES              := $(common_includes) \
@@ -81,13 +72,14 @@ LOCAL_SHARED_LIBRARIES        := $(common_libs) libqdMetaData libdl libgrallocut
                                   android.hardware.graphics.mapper@2.1 \
                                   android.hardware.graphics.mapper@3.0 \
                                   android.hardware.graphics.mapper@4.0
-LOCAL_CFLAGS                  := $(common_flags) $(qmaa_flags) -DLOG_TAG=\"qdgralloc\" -Wno-sign-conversion \
+LOCAL_CFLAGS                  := $(common_flags) -DLOG_TAG=\"qdgralloc\" -Wno-sign-conversion \
                                  -D__QTI_DISPLAY_GRALLOC__
+ifeq ($(ENABLE_HYP),true)
+LOCAL_CFLAGS += -DHYPERVISOR
+endif
+
 ifneq ($(TARGET_USES_GRALLOC4),false)
 LOCAL_CFLAGS                  += -DTARGET_USES_GRALLOC4
-endif
-ifeq ($(TARGET_GRALLOC_HANDLE_HAS_RESERVED_SIZE),true)
-LOCAL_CFLAGS                  += -DGRALLOC_HANDLE_HAS_RESERVED_SIZE
 endif
 LOCAL_ADDITIONAL_DEPENDENCIES := $(common_deps)
 LOCAL_SRC_FILES               := gr_allocator.cpp gr_buf_mgr.cpp gr_ion_alloc.cpp
@@ -96,7 +88,6 @@ include $(BUILD_SHARED_LIBRARY)
 #mapper
 include $(CLEAR_VARS)
 LOCAL_MODULE                  := android.hardware.graphics.mapper@3.0-impl-qti-display
-LOCAL_SANITIZE                := integer_overflow
 LOCAL_VENDOR_MODULE           := true
 LOCAL_MODULE_RELATIVE_PATH    := hw
 LOCAL_MODULE_TAGS             := optional
@@ -114,7 +105,7 @@ LOCAL_SHARED_LIBRARIES        := $(common_libs) \
                                   android.hardware.graphics.mapper@2.1 \
                                   vendor.qti.hardware.display.mapperextensions@1.1 \
                                   android.hardware.graphics.mapper@3.0
-LOCAL_CFLAGS                  := $(common_flags) $(qmaa_flags) -DLOG_TAG=\"qdgralloc\" -Wno-sign-conversion \
+LOCAL_CFLAGS                  := $(common_flags) -DLOG_TAG=\"qdgralloc\" -Wno-sign-conversion \
                                  -D__QTI_DISPLAY_GRALLOC__
 LOCAL_ADDITIONAL_DEPENDENCIES := $(common_deps)
 LOCAL_SRC_FILES               := QtiMapper.cpp QtiMapperExtensions.cpp
@@ -132,6 +123,7 @@ LOCAL_C_INCLUDES              := $(common_includes) $(kernel_includes)
 LOCAL_HEADER_LIBRARIES        := display_headers
 LOCAL_SHARED_LIBRARIES        := $(common_libs) \
                                   libhidlbase \
+                                  libhidltransport \
                                   libqdMetaData \
                                   libgrallocutils \
                                   libgralloccore \
@@ -144,11 +136,6 @@ LOCAL_SHARED_LIBRARIES        := $(common_libs) \
                                   vendor.qti.hardware.display.mapperextensions@1.1 \
                                   android.hardware.graphics.mapper@3.0 \
                                   android.hardware.graphics.mapper@4.0
-
-ifeq ($(shell expr $(PLATFORM_SDK_VERSION) \<= 28), 1)
-LOCAL_SHARED_LIBRARIES += libhidltransport
-endif
-
 LOCAL_CFLAGS                  := $(common_flags) $(qmaa_flags) -DLOG_TAG=\"qdgralloc\" -Wno-sign-conversion \
                                  -D__QTI_DISPLAY_GRALLOC__
 LOCAL_ADDITIONAL_DEPENDENCIES := $(common_deps)
@@ -160,7 +147,6 @@ endif
 #allocator
 include $(CLEAR_VARS)
 LOCAL_MODULE                  := vendor.qti.hardware.display.allocator-service
-LOCAL_SANITIZE                := integer_overflow
 LOCAL_VENDOR_MODULE           := true
 LOCAL_MODULE_RELATIVE_PATH    := hw
 LOCAL_MODULE_TAGS             := optional
@@ -182,7 +168,7 @@ LOCAL_SHARED_LIBRARIES        := $(common_libs) \
                                  android.hardware.graphics.allocator@3.0 \
                                  vendor.qti.hardware.display.mapperextensions@1.0 \
                                  vendor.qti.hardware.display.mapperextensions@1.1
-LOCAL_CFLAGS                  := -DLOG_TAG=\"qdgralloc\" $(common_flags) $(qmaa_flags)
+LOCAL_CFLAGS                  := -DLOG_TAG=\"qdgralloc\" $(common_flags)
 ifneq ($(TARGET_USES_GRALLOC4),false)
 LOCAL_CFLAGS                  += -DTARGET_USES_GRALLOC4
 endif

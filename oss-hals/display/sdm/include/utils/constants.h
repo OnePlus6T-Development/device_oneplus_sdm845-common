@@ -1,5 +1,5 @@
 /*
-* Copyright (c) 2014-2020, The Linux Foundation. All rights reserved.
+* Copyright (c) 2014 - 2018, The Linux Foundation. All rights reserved.
 *
 * Redistribution and use in source and binary forms, with or without modification, are permitted
 * provided that the following conditions are met:
@@ -43,7 +43,6 @@
 #define UINT32(exp) static_cast<uint32_t>(exp)
 #define INT32(exp) static_cast<int32_t>(exp)
 #define UINT64(exp) static_cast<uint64_t>(exp)
-#define DOUBLE(exp) static_cast<double>(exp)
 
 #define ROUND_UP(number, step) ((((number) + ((step) - 1)) / (step)) * (step))
 
@@ -52,7 +51,7 @@
 #define ROUND_UP_ALIGN_DOWN(value, a) FLOAT(FloorToMultipleOf(UINT32(value + 0.5f), UINT32(a)))
 #define ROUND_UP_ALIGN_UP(value, a) FLOAT(CeilToMultipleOf(UINT32(value + 0.5f), UINT32(a)))
 
-#define IDLE_TIMEOUT_DEFAULT_MS 90
+#define IDLE_TIMEOUT_DEFAULT_MS 70
 #define IDLE_TIMEOUT_ACTIVE_MS IDLE_TIMEOUT_DEFAULT_MS
 #define IDLE_TIMEOUT_INACTIVE_MS 520
 
@@ -76,15 +75,10 @@ namespace sdm {
 
   const int kThreadPriorityUrgent = -9;
   const int kMaxRotatePerLayer = 2;
+  const uint32_t kMaxBlitTargetLayers = 2;
   const int kPageSize = 4096;
   const uint32_t kGridSize = 129;  // size used for non-linear transformation before Tone-mapping
   const uint32_t kLutDim = 17;  // Dim of the 3d LUT for tone-mapping.
-  const int kColorTransformMatrixSize = 16;
-  const float kIdentityMatrix[kColorTransformMatrixSize] = { 1.0, 0.0, 0.0, 0.0,
-                                                             0.0, 1.0, 0.0, 0.0,
-                                                             0.0, 0.0, 1.0, 0.0,
-                                                             0.0, 0.0, 0.0, 1.0 };
-  const float kBufferHeightFactor = 1.5f;
 
   typedef void * Handle;
 

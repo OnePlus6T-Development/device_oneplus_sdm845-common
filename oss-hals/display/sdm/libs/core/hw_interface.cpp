@@ -1,5 +1,5 @@
 /*
-* Copyright (c) 2017-2018, 2020, The Linux Foundation. All rights reserved.
+* Copyright (c) 2017-2018, The Linux Foundation. All rights reserved.
 *
 * Redistribution and use in source and binary forms, with or without
 * modification, are permitted provided that the following conditions are
@@ -31,11 +31,13 @@
 #include <utils/utils.h>
 
 #include "hw_interface.h"
-#ifndef TARGET_HEADLESS
+#include "fb/hw_device.h"
+#include "fb/hw_primary.h"
+#include "fb/hw_hdmi.h"
+#include "fb/hw_virtual.h"
 #include "drm/hw_peripheral_drm.h"
 #include "drm/hw_virtual_drm.h"
 #include "drm/hw_tv_drm.h"
-#endif
 
 #define __CLASS__ "HWInterface"
 
@@ -43,22 +45,34 @@ namespace sdm {
 
 DisplayError HWInterface::Create(int32_t display_id, DisplayType type,
                                  HWInfoInterface *hw_info_intf,
+                                 BufferSyncHandler *buffer_sync_handler,
                                  BufferAllocator *buffer_allocator, HWInterface **intf) {
   DisplayError error = kErrorNone;
   HWInterface *hw = nullptr;
+  DriverType driver_type = GetDriverType();
 
   switch (type) {
-#ifndef TARGET_HEADLESS
     case kBuiltIn:
-        hw = new HWPeripheralDRM(display_id, buffer_allocator, hw_info_intf);
+      if (driver_type == DriverType::FB) {
+        hw = new HWPrimary(buffer_sync_handler, hw_info_intf);
+      } else {
+        hw = new HWPeripheralDRM(display_id, buffer_sync_handler, buffer_allocator, hw_info_intf);
+      }
       break;
     case kPluggable:
-        hw = new HWTVDRM(display_id, buffer_allocator, hw_info_intf);
+      if (driver_type == DriverType::FB) {
+        hw = new HWHDMI(buffer_sync_handler, hw_info_intf);
+      } else {
+        hw = new HWTVDRM(display_id, buffer_sync_handler, buffer_allocator, hw_info_intf);
+      }
       break;
     case kVirtual:
-        hw = new HWVirtualDRM(display_id, buffer_allocator, hw_info_intf);
+      if (driver_type == DriverType::FB) {
+        hw = new HWVirtual(buffer_sync_handler, hw_info_intf);
+      } else {
+        hw = new HWVirtualDRM(display_id, buffer_sync_handler, buffer_allocator, hw_info_intf);
+      }
       break;
-#endif
     default:
       DLOGE("Undefined display type");
       return kErrorUndefined;

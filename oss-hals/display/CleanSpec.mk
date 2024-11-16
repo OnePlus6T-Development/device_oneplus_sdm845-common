@@ -9,15 +9,8 @@ $(call add-clean-step, rm -rf $(PRODUCT_OUT)/vendor/bin/hw/android.hardware.grap
 $(call add-clean-step, rm -rf $(PRODUCT_OUT)/vendor/etc/init/android.hardware.graphics.composer@2.3-service.rc)
 $(call add-clean-step, rm -rf $(PRODUCT_OUT)/vendor/lib64/hw/android.hardware.graphics.composer@2.3-impl.so)
 
+
 # Clean old target objs
-$(call add-clean-step, rm -rf $(PRODUCT_OUT)/vendor/lib64/hw/hwcomposer.kona.so)
-$(call add-clean-step, rm -rf $(PRODUCT_OUT)/vendor/lib/hw/hwcomposer.kona.so)
-$(call add-clean-step, rm -rf $(PRODUCT_OUT)/vendor/lib64/hw/gralloc.kona.so)
-$(call add-clean-step, rm -rf $(PRODUCT_OUT)/vendor/lib/hw/gralloc.kona.so)
-$(call add-clean-step, rm -rf $(PRODUCT_OUT)/vendor/lib64/hw/lights.kona.so)
-$(call add-clean-step, rm -rf $(PRODUCT_OUT)/vendor/lib/hw/lights.kona.so)
-$(call add-clean-step, rm -rf $(PRODUCT_OUT)/vendor/lib64/hw/memtrack.kona.so)
-$(call add-clean-step, rm -rf $(PRODUCT_OUT)/vendor/lib/hw/memtrack.kona.so)
 $(call add-clean-step, rm -rf $(PRODUCT_OUT)/vendor/lib64/hw/hwcomposer.msmnile.so)
 $(call add-clean-step, rm -rf $(PRODUCT_OUT)/vendor/lib/hw/hwcomposer.msmnile.so)
 $(call add-clean-step, rm -rf $(PRODUCT_OUT)/vendor/lib64/hw/gralloc.msmnile.so)

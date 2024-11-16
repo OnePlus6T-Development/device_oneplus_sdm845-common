@@ -1,5 +1,5 @@
 /*
-* Copyright (c) 2014-2020, The Linux Foundation. All rights reserved.
+* Copyright (c) 2014 - 2019, The Linux Foundation. All rights reserved.
 *
 * Redistribution and use in source and binary forms, with or without modification, are permitted
 * provided that the following conditions are met:
@@ -37,15 +37,17 @@ namespace sdm {
 class DisplayPluggable : public DisplayBase, HWEventHandler {
  public:
   DisplayPluggable(DisplayEventHandler *event_handler, HWInfoInterface *hw_info_intf,
-                   BufferAllocator *buffer_allocator, CompManager *comp_manager);
-  DisplayPluggable(int32_t display_id, DisplayEventHandler *event_handler,
-                   HWInfoInterface *hw_info_intf, BufferAllocator *buffer_allocator,
+                   BufferSyncHandler *buffer_sync_handler, BufferAllocator *buffer_allocator,
                    CompManager *comp_manager);
+  DisplayPluggable(int32_t display_id, DisplayEventHandler *event_handler,
+                   HWInfoInterface *hw_info_intf, BufferSyncHandler *buffer_sync_handler,
+                   BufferAllocator *buffer_allocator, CompManager *comp_manager);
   virtual DisplayError Init();
   virtual DisplayError Prepare(LayerStack *layer_stack);
   virtual DisplayError GetRefreshRateRange(uint32_t *min_refresh_rate, uint32_t *max_refresh_rate);
-  virtual DisplayError SetRefreshRate(uint32_t refresh_rate, bool final_rate, bool idle_screen);
+  virtual DisplayError SetRefreshRate(uint32_t refresh_rate, bool final_rate);
   virtual bool IsUnderscanSupported();
+  virtual DisplayError OnMinHdcpEncryptionLevelChange(uint32_t min_enc_level);
   virtual DisplayError InitializeColorModes();
   virtual DisplayError SetColorMode(const std::string &color_mode);
   virtual DisplayError GetColorModeCount(uint32_t *mode_count);
@@ -55,8 +57,6 @@ class DisplayPluggable : public DisplayBase, HWEventHandler {
     return kErrorNone;
   }
   virtual DisplayError TeardownConcurrentWriteback(void) { return kErrorNotSupported; }
-  virtual DisplayError colorSamplingOn();
-  virtual DisplayError colorSamplingOff();
 
   // Implement the HWEventHandlers
   virtual DisplayError VSync(int64_t timestamp);
@@ -68,19 +68,19 @@ class DisplayPluggable : public DisplayBase, HWEventHandler {
   virtual void PingPongTimeout() {}
   virtual void PanelDead() {}
   virtual void HwRecovery(const HWRecoveryEvent sdm_event_code);
-  void Histogram(int histogram_fd, uint32_t blob_id) override;
 
   void UpdateColorModes();
-  void InitializeColorModesFromColorspace();
 
  private:
   DisplayError GetOverrideConfig(uint32_t *mode_index);
   void GetScanSupport();
+  void SetS3DMode(LayerStack *layer_stack);
 
   static const int kPropertyMax = 256;
 
   bool underscan_supported_ = false;
   HWScanSupport scan_support_;
+  std::map<LayerBufferS3DFormat, HWS3DMode> s3d_format_to_mode_;
   std::vector<HWEvent> event_list_ = {HWEvent::VSYNC, HWEvent::IDLE_NOTIFY, HWEvent::EXIT,
                                       HWEvent::CEC_READ_MESSAGE, HWEvent::HW_RECOVERY};
   uint32_t current_refresh_rate_ = 0;

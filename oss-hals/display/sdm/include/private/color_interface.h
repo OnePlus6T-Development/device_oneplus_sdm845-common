@@ -30,7 +30,6 @@
 #ifndef __COLOR_INTERFACE_H__
 #define __COLOR_INTERFACE_H__
 
-#include <string>
 #include "core/sdm_types.h"
 #include "color_params.h"
 
@@ -75,8 +74,6 @@ class ColorInterface {
                                             PPFeaturesConfig *out_features,
                                             PPPendingParams *pending_action) = 0;
 
-  virtual DisplayError ApplyDefaultDisplayMode(PPFeaturesConfig *out_features) = 0;
-
   virtual DisplayError ColorIntfSetColorTransform(PPFeaturesConfig *out_features,
                                                 uint32_t disp_id, uint32_t length,
                                                 const double *trans_data) = 0;
@@ -96,10 +93,6 @@ class ColorInterface {
   virtual DisplayError ColorIntfGetDefaultModeID(PPFeaturesConfig *out_features,
                                                  uint32_t disp_id, int32_t *mode_id) = 0;
   virtual DisplayError ColorIntfCombineColorModes() = 0;
-  virtual DisplayError ColorIntfConvertToPPFeature(PPFeaturesConfig *out_features,
-                                                  uint32_t disp_id, bool enable,
-                                                  const std::string &hw_asset, void *in_data) = 0;
-  virtual DisplayError ColorIntfGameEnhancementSupported(bool *supported) = 0;
 
  protected:
   virtual ~ColorInterface() {}

@@ -1,5 +1,5 @@
 /*
-* Copyright (c) 2018-2021, The Linux Foundation. All rights reserved.
+* Copyright (c) 2018 - 2020, The Linux Foundation. All rights reserved.
 *
 * Redistribution and use in source and binary forms, with or without
 * modification, are permitted provided that the following conditions are
@@ -32,17 +32,19 @@
 
 #define DISP_PROP_PREFIX                     "vendor.display."
 #define GRALLOC_PROP_PREFIX                  "vendor.gralloc."
+#define RO_DISP_PROP_PREFIX                  "ro.vendor.display."
 #define PERSIST_DISP_PROP_PREFIX             "persist.vendor.display."
 
 #define DISPLAY_PROP(prop_name)              DISP_PROP_PREFIX prop_name
 #define GRALLOC_PROP(prop_name)              GRALLOC_PROP_PREFIX prop_name
+#define RO_DISPLAY_PROP(prop_name)           RO_DISP_PROP_PREFIX prop_name
 #define PERSIST_DISPLAY_PROP(prop_name)      PERSIST_DISP_PROP_PREFIX prop_name
 
-// Start of property
 #define COMPOSITION_MASK_PROP                DISPLAY_PROP("comp_mask")
 #define HDMI_CONFIG_INDEX_PROP               DISPLAY_PROP("hdmi_cfg_idx")
 #define IDLE_TIME_PROP                       DISPLAY_PROP("idle_time")
 #define IDLE_TIME_INACTIVE_PROP              DISPLAY_PROP("idle_time_inactive")
+#define BOOT_ANIMATION_LAYER_COUNT_PROP      DISPLAY_PROP("boot_anim_layer_count")
 #define DISABLE_ROTATOR_DOWNSCALE_PROP       DISPLAY_PROP("disable_rotator_downscale")
 // Enables rotator for UI
 #define ENABLE_ROTATOR_UI_PROP               DISPLAY_PROP("enable_rotator_ui")
@@ -69,13 +71,20 @@
 #define FB_WIDTH_PROP                        DISPLAY_PROP("fb_width")
 #define FB_HEIGHT_PROP                       DISPLAY_PROP("fb_height")
 #define DISABLE_METADATA_DYNAMIC_FPS_PROP    DISPLAY_PROP("disable_metadata_dynamic_fps")
+#define DISABLE_BLIT_COMPOSITION_PROP        DISPLAY_PROP("disable_blit_comp")
 #define DISABLE_SKIP_VALIDATE_PROP           DISPLAY_PROP("disable_skip_validate")
+#define HDMI_S3D_MODE_PROP                   DISPLAY_PROP("hdmi_s3d_mode")
 #define DISABLE_DESTINATION_SCALER_PROP      DISPLAY_PROP("disable_dest_scaler")
+#define ENABLE_PARTIAL_UPDATE_PROP           DISPLAY_PROP("enable_partial_update")
+#define DISABLE_UBWC_PROP                    GRALLOC_PROP("disable_ubwc")
+#define ENABLE_FB_UBWC_PROP                  GRALLOC_PROP("enable_fb_ubwc")
+#define MAP_FB_MEMORY_PROP                   GRALLOC_PROP("map_fb_memory")
+
+#define MAX_BLIT_FACTOR_PROP                 DISPLAY_PROP("max_blit_factor")
 #define DISABLE_SECURE_INLINE_ROTATOR_PROP   DISPLAY_PROP("disable_secure_inline_rotator")
 #define DISABLE_MULTIRECT_PROP               DISPLAY_PROP("disable_multirect")
 #define DISABLE_UBWC_FF_VOTING_PROP          DISPLAY_PROP("disable_ubwc_ff_voting")
 #define DISABLE_INLINE_ROTATOR_PROP          DISPLAY_PROP("disable_inline_rotator")
-#define DISABLE_OFFLINE_ROTATOR_PROP         DISPLAY_PROP("disable_offline_rotator")
 #define DISABLE_FB_CROPPING_PROP             DISPLAY_PROP("disable_fb_cropping")
 #define PRIORITIZE_CACHE_COMPOSITION_PROP    DISPLAY_PROP("prioritize_cache_comp")
 #define DISABLE_HW_RECOVERY_PROP             DISPLAY_PROP("disable_hw_recovery")
@@ -88,65 +97,41 @@
 #define DISABLE_FBID_CACHE                   DISPLAY_PROP("disable_fbid_cache")
 #define DISABLE_HOTPLUG_BWCHECK              DISPLAY_PROP("disable_hotplug_bwcheck")
 #define DISABLE_MASK_LAYER_HINT              DISPLAY_PROP("disable_mask_layer_hint")
+
 #define DISABLE_HDR_LUT_GEN                  DISPLAY_PROP("disable_hdr_lut_gen")
+#define ENABLE_DEFAULT_COLOR_MODE            DISPLAY_PROP("enable_default_color_mode")
 #define DISABLE_HDR                          DISPLAY_PROP("hwc_disable_hdr")
+#define DATASPACE_SATURATION_MATRIX_PROP     DISPLAY_PROP("dataspace_saturation_matrix")
+#define DISABLE_QTI_BSP                      DISPLAY_PROP("disable_qti_bsp")
+#define UPDATE_VSYNC_ON_DOZE                 DISPLAY_PROP("update_vsync_on_doze")
+#define PANEL_MOUNTFLIP                      DISPLAY_PROP("panel_mountflip")
+#define VDS_ALLOW_HWC                        DISPLAY_PROP("vds_allow_hwc")
+#define QDFRAMEWORK_LOGS                     DISPLAY_PROP("qdframework_logs")
+
+#define HDR_CONFIG_PROP                      RO_DISPLAY_PROP("hdr.config")
 #define QDCM_PCC_TRANS_PROP                  DISPLAY_PROP("qdcm.pcc_for_trans")
 #define QDCM_DIAGONAL_MATRIXMODE_PROP        DISPLAY_PROP("qdcm.diagonal_matrix_mode")
+#define QDCM_DISABLE_TIMEOUT_PROP            PERSIST_DISPLAY_PROP("qdcm.disable_timeout")
 #define QDCM_MODE_COMBINE_PROP               DISPLAY_PROP("qdcm.mode_combine")
 #define PREFER_MULTIRECT_PROP                DISPLAY_PROP("prefer_multirect")
 #define DROP_SKEWED_VSYNC                    DISPLAY_PROP("drop_skewed_vsync")
 #define DISABLE_FAST_PATH                    DISPLAY_PROP("disable_fast_path")
-#define DISABLE_SYSTEM_LOAD_CHECK            DISPLAY_PROP("disable_system_load_check")
-#define DISABLE_IDLE_SCALING_LAYERS          DISPLAY_PROP("disable_idle_scaling_layers")
-// Disable microidle condition
-#define DISABLE_SINGLE_LM_SPLIT_PROP         DISPLAY_PROP("disable_single_lm_split")
-// Enable posted start dynamic
-#define ENABLE_POSTED_START_DYN_PROP         DISPLAY_PROP("enable_posted_start_dyn")
-#define ENABLE_OPTIMIZE_REFRESH              DISPLAY_PROP("enable_optimize_refresh")
-#define DISABLE_PARALLEL_CACHE               DISPLAY_PROP("disable_parallel_cache")
-#define DISABLE_LAYER_STITCH                 DISPLAY_PROP("disable_layer_stitch")
-// Disable 3d tonemap support for UI layers
-#define DISABLE_UI_3D_TONEMAP                DISPLAY_PROP("disable_ui_3d_tonemap")
+#define BUILTIN_BASEID_AND_SIZE_PROP         DISPLAY_PROP("builtin_baseid_and_size")
+#define PLUGGABLE_BASEID_AND_SIZE_PROP       DISPLAY_PROP("pluggable_baseid_and_size")
+#define VIRTUAL_BASEID_AND_SIZE_PROP         DISPLAY_PROP("virtual_baseid_and_size")
+#define ENABLE_QDCM_DIAG                     DISPLAY_PROP("enable_qdcm_diag")
 #define QDCM_DISABLE_FACTORY_MODE_PROP       DISPLAY_PROP("qdcm.disable_factory_mode")
-#define ENABLE_ASYNC_POWERMODE               DISPLAY_PROP("enable_async_powermode")
-#define ENABLE_GPU_TONEMAPPER_PROP           DISPLAY_PROP("enable_gpu_tonemapper")
-#define ENABLE_FORCE_SPLIT                   DISPLAY_PROP("enable_force_split")
-#define DISABLE_GPU_COLOR_CONVERT            DISPLAY_PROP("disable_gpu_color_convert")
-#define ENABLE_ASYNC_VDS_CREATION            DISPLAY_PROP("enable_async_vds_creation")
-// MMNOC efficiency factor for Camera and Non-Camera cases
-#define NORMAL_NOC_EFFICIENCY_FACTOR         DISPLAY_PROP("normal_noc_efficiency_factor")
-#define CAMERA_NOC_EFFICIENCY_FACTOR         DISPLAY_PROP("camera_noc_efficiency_factor")
-#define ENABLE_HISTOGRAM_INTR                DISPLAY_PROP("enable_hist_intr")
-#define DEFER_FPS_FRAME_COUNT                DISPLAY_PROP("defer_fps_frame_count")
-#define ENABLE_BW_LIMITS                     DISPLAY_PROP("enable_bw_limits")
-#define DISABLE_ROTATOR_PRE_DOWNSCALER_PROP  DISPLAY_PROP("disable_pre_downscaler")
-#define DISABLE_INLINE_ROTATOR_UI_PROP       DISPLAY_PROP("disable_inline_rotator_ui")
-#define ENABLE_POMS_DURING_DOZE              DISPLAY_PROP("enable_poms_during_doze")
-// RC
-#define ENABLE_ROUNDED_CORNER                DISPLAY_PROP("enable_rounded_corner")
-#define DISABLE_ROUNDED_CORNER_THREAD        DISPLAY_PROP("disable_rounded_corner_thread")
-#define DISABLE_DYNAMIC_FPS                  DISPLAY_PROP("disable_dynamic_fps")
-#define ENHANCE_IDLE_TIME                    DISPLAY_PROP("enhance_idle_time")
-#define ENABLE_QSYNC_IDLE                    DISPLAY_PROP("enable_qsync_idle")
-
-// PERF hint properties
-#define ENABLE_PERF_HINT_LARGE_COMP_CYCLE    DISPLAY_PROP("enable_perf_hint_large_comp_cycle")
-#define ENABLE_HDR10_GPU_TARGET              DISPLAY_PROP("enable_hdr10_gpu_target")
-
-// Add all vendor.display properties above
-
-#define DISABLE_UBWC_PROP                    GRALLOC_PROP("disable_ubwc")
-
-// Add all vendor.gralloc.properties above
-
-#define QDCM_DISABLE_TIMEOUT_PROP            PERSIST_DISPLAY_PROP("qdcm.disable_timeout")
-
-// Add all persist.vendor.display.properties above
 
 #define ZERO_SWAP_INTERVAL                   "vendor.debug.egl.swapinterval"
-#define WINDOW_RECT_PROP                     DISPLAY_PROP("window_rect")
-#define DISABLE_IDLE_TIME_HDR                DISPLAY_PROP("disable_idle_time_hdr")
+#define ENABLE_OPTIMIZE_REFRESH              DISPLAY_PROP("enable_optimize_refresh")
+#define ENABLE_ASYNC_POWERMODE               DISPLAY_PROP("enable_async_powermode")
+#define DISABLE_UI_3D_TONEMAP                DISPLAY_PROP("disable_ui_3d_tonemap")
+#define DISABLE_PARALLEL_CACHE               DISPLAY_PROP("disable_parallel_cache")
+#define ENABLE_FORCE_SPLIT                   DISPLAY_PROP("enable_force_split")
+#define DEFER_FPS_FRAME_COUNT                DISPLAY_PROP("defer_fps_frame_count")
 #define DISABLE_IDLE_TIME_VIDEO              DISPLAY_PROP("disable_idle_time_video")
-// Add all other.properties above
-// End of property
+#define DISABLE_IDLE_TIME_HDR                DISPLAY_PROP("disable_idle_time_hdr")
+#define ENABLE_POMS_DURING_DOZE              DISPLAY_PROP("enable_poms_during_doze")
+#define OVERRIDE_DOZE_MODE_PROP              DISPLAY_PROP("override_doze_mode")
+
 #endif  // __DISPLAY_PROPERTIES_H__

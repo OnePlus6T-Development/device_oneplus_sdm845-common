@@ -1,5 +1,5 @@
 /*
-* Copyright (c) 2017-2021, The Linux Foundation. All rights reserved.
+* Copyright (c) 2017 - 2020, The Linux Foundation. All rights reserved.
 *
 * Redistribution and use in source and binary forms, with or without
 * modification, are permitted provided that the following conditions are
@@ -34,16 +34,13 @@
 #include <string>
 #include <utility>
 #include <vector>
-#include <array>
+#include <bitset>
 
 #include "xf86drm.h"
 #include "xf86drmMode.h"
 #include <drm/msm_drm.h>
 #include <drm/msm_drm_pp.h>
-
-#ifdef KERNEL_5_4
 #include <drm/sde_drm.h>
-#endif
 
 namespace sde_drm {
 
@@ -138,6 +135,12 @@ enum struct DRMOps {
    */
   PLANE_SET_SCALER_CONFIG,
   /*
+   * Op: Sets plane rotation destination rect
+   * Arg: uint32_t - Plane ID
+   *      DRMRect - rotator dst Rectangle
+   */
+  PLANE_SET_ROTATION_DST_RECT,
+  /*
    * Op: Sets FB Secure mode for this plane.
    * Arg: uint32_t - Plane ID
    *      uint32_t - Value of the FB Secure mode.
@@ -155,12 +158,6 @@ enum struct DRMOps {
    *      uint32_t - multirect mode
    */
   PLANE_SET_MULTIRECT_MODE,
-  /*
-   * Op: Sets sspp layout on this plane.
-   * Arg: uint32_t - Plane ID
-   *      uint32_t - SSPP Layout Index
-   */
-  PLANE_SET_SSPP_LAYOUT,
   /*
    * Op: Sets rotator output frame buffer ID for plane.
    * Arg: uint32_t - Plane ID
@@ -389,11 +386,6 @@ enum struct DRMOps {
    */
   DPPS_COMMIT_FEATURE,
   /*
-   * Op: Commit panel features.
-   * Arg: drmModeAtomicReq - Atomic request
-   */
-  COMMIT_PANEL_FEATURES,
-  /*
    * Op: Sets qsync mode on connector
    * Arg: uint32_t - Connector ID
    *     uint32_t - qsync mode
@@ -405,18 +397,6 @@ enum struct DRMOps {
    *      uint32_t - Topology control bit-mask
    */
   CONNECTOR_SET_TOPOLOGY_CONTROL,
-  /*
-   * Op: Sets frame trigger mode on this connector
-   * Arg: uint32_t - Connector ID
-   *      uint32_t - Frame trigger mode
-   */
-  CONNECTOR_SET_FRAME_TRIGGER,
-  /*
-   * Op: Sets colorspace on DP connector
-   * Arg: uint32_t - Connector ID
-   *      uint32_t - colorspace value bit-mask
-   */
-  CONNECTOR_SET_COLORSPACE,
 };
 
 enum struct DRMRotation {
@@ -493,9 +473,9 @@ enum struct SmartDMARevision {
 
 /* Inline Rotation version */
 enum struct InlineRotationVersion {
-  kInlineRotationNone,
-  kInlineRotationV1,
-  kInlineRotationV2,
+  UNKNOWN,
+  V1,
+  V1p1,   // Rotator FB ID needs to be set
 };
 
 /* Per CRTC Resource Info*/
@@ -529,18 +509,16 @@ struct DRMCrtcInfo {
   uint32_t min_prefill_lines = 0;
   int secure_disp_blend_stage = -1;
   bool concurrent_writeback = false;
+  uint32_t num_mnocports = 0;
+  uint32_t mnoc_bus_width = 0;
+  bool use_baselayer_for_stage = false;
   uint32_t vig_limit_index = 0;
   uint32_t dma_limit_index = 0;
   uint32_t scaling_limit_index = 0;
   uint32_t rotation_limit_index = 0;
   uint32_t line_width_constraints_count = 0;
   std::vector< std::pair <uint32_t, uint32_t> > line_width_limits;
-  uint32_t num_mnocports;
-  uint32_t mnoc_bus_width;
-  bool use_baselayer_for_stage = false;
-  bool has_micro_idle = false;
-  uint32_t ubwc_version = 1;
-  uint64_t rc_total_mem_size = 0;
+  float vbif_cmd_ff = 0.0f;
 };
 
 enum struct DRMPlaneType {
@@ -569,25 +547,22 @@ struct DRMPlaneTypeInfo {
   std::vector<std::pair<uint32_t, uint64_t>> formats_supported;
   uint32_t max_linewidth;
   uint32_t max_scaler_linewidth;
-  uint32_t max_rotation_linewidth; // inline rotation limitation
   uint32_t max_upscale;
   uint32_t max_downscale;
   uint32_t max_horizontal_deci;
   uint32_t max_vertical_deci;
   uint64_t max_pipe_bandwidth;
-  uint64_t max_pipe_bandwidth_high;
   uint32_t cache_size;  // cache size in bytes for inline rotation support.
   bool has_excl_rect = false;
   QSEEDStepVersion qseed3_version;
   bool multirect_prop_present = false;
   InlineRotationVersion inrot_version;  // inline rotation version
-  std::vector<std::pair<uint32_t, uint64_t>> inrot_fmts_supported;
-  float true_inline_dwnscale_rt_num = 11.0;
-  float true_inline_dwnscale_rt_denom = 5.0;
   bool inverse_pma = false;
   uint32_t dgm_csc_version = 0;  // csc used with DMA
   std::map<DRMTonemapLutType, uint32_t> tonemap_lut_version_map = {};
   bool block_sec_ui = false;
+  // Allow all planes to be usable on all displays by default
+  std::bitset<32> hw_block_mask = std::bitset<32>().set();
 };
 
 // All DRM Planes as map<Plane_id , plane_type_info> listed from highest to lowest priority
@@ -602,9 +577,6 @@ enum struct DRMTopology {
   DUAL_LM_MERGE,
   DUAL_LM_MERGE_DSC,
   DUAL_LM_DSCMERGE,
-  QUAD_LM_MERGE,
-  QUAD_LM_DSCMERGE,
-  QUAD_LM_MERGE_DSC,
   PPSPLIT,
 };
 
@@ -656,7 +628,6 @@ struct DRMConnectorInfo {
   uint32_t topology_control;
   bool dyn_bitclk_support;
   std::vector<uint8_t> edid;
-  uint32_t supported_colorspaces;
 };
 
 // All DRM Connectors as map<Connector_id , connector_info>
@@ -701,7 +672,7 @@ enum DRMPPFeatureID {
   kPPFeaturesMax,
 };
 
-enum DRMPropType {
+enum DRMPPPropType {
   kPropEnum,
   kPropRange,
   kPropBlob,
@@ -710,7 +681,7 @@ enum DRMPropType {
 
 struct DRMPPFeatureInfo {
   DRMPPFeatureID id;
-  DRMPropType type;
+  DRMPPPropType type;
   uint32_t version;
   uint32_t payload_size;
   void *payload;
@@ -732,27 +703,13 @@ enum DRMDPPSFeatureID {
   kFeatureAbaHistIRQ,
   kFeatureAbaLut,
   // BL scale properties
-  kFeatureSvBlScale,
+  kFeatureAd4BlScale,
   kFeatureBacklightScale,
   // Events
   kFeaturePowerEvent,
   kFeatureAbaHistEvent,
   kFeatureBackLightEvent,
   kFeatureAdAttBlEvent,
-  kFeatureLtmHistEvent,
-  kFeatureLtmWbPbEvent,
-  kFeatureLtmOffEvent,
-  // LTM properties
-  kFeatureLtm,
-  kFeatureLtmInit,
-  kFeatureLtmCfg,
-  kFeatureLtmNoiseThresh,
-  kFeatureLtmBufferCtrl,
-  kFeatureLtmQueueBuffer,
-  kFeatureLtmQueueBuffer2,
-  kFeatureLtmQueueBuffer3,
-  kFeatureLtmHistCtrl,
-  kFeatureLtmVlut,
   // Insert features above
   kDppsFeaturesMax,
 };
@@ -763,36 +720,9 @@ struct DppsFeaturePayload {
   uint64_t value;
 };
 
-struct DRMDppsLtmBuffers {
-  uint32_t num_of_buffers;
-  uint32_t buffer_size;
-  std::array<int, LTM_BUFFER_SIZE> ion_buffer_fd;
-  std::array<int, LTM_BUFFER_SIZE> drm_fb_id;
-  std::array<void*, LTM_BUFFER_SIZE> uva;
-  int status;
-};
-
 struct DRMDppsFeatureInfo {
   DRMDPPSFeatureID id;
-  uint32_t obj_id;
   uint32_t version;
-  uint32_t payload_size;
-  void *payload;
-};
-
-enum DRMPanelFeatureID {
-  kDRMPanelFeatureRCInit,
-  kDRMPanelFeatureDsppRCInfo,
-  kDRMPanelFeatureMax,
-};
-
-struct DRMPanelFeatureInfo  {
-  DRMPanelFeatureID prop_id;
-  uint32_t obj_type;
-  uint32_t obj_id;
-  uint32_t version;
-  uint32_t prop_size;
-  uint64_t prop_ptr;
 };
 
 enum AD4Modes {
@@ -851,12 +781,6 @@ enum struct DRMMultiRectMode {
   SERIAL = 2,
 };
 
-enum struct DRMSSPPLayoutIndex {
-  NONE = 0,
-  LEFT = 1,
-  RIGHT = 2,
-};
-
 enum struct DRMCWbCaptureMode {
   MIXER_OUT = 0,
   DSPP_OUT = 1,
@@ -887,29 +811,6 @@ struct DRMSolidfillStage {
   uint32_t color_bit_depth = 0;
   uint32_t z_order = 0;
   uint32_t plane_alpha = 0xff;
-};
-
-enum struct DRMFrameTriggerMode {
-  FRAME_DONE_WAIT_DEFAULT = 0,
-  FRAME_DONE_WAIT_SERIALIZE,
-  FRAME_DONE_WAIT_POSTED_START,
-};
-
-/* DRM Color spaces exposed by the DP connector */
-enum struct DRMColorspace {
-  DEFAULT = 0,
-  SMPTE_170M_YCC,
-  BT709_YCC,
-  XVYCC_601,
-  XVYCC_709,
-  SYCC_601,
-  OPYCC_601,
-  OPRGB,
-  BT2020_CYCC,
-  BT2020_RGB,
-  BT2020_YCC,
-  DCI_P3_RGB_D65,
-  DCI_P3_RGB_THEATER,
 };
 
 /* DRM Atomic Request Property Set.
@@ -1082,18 +983,6 @@ class DRMManagerInterface {
    * [output]: Dpps feature version, info->version
    */
   virtual void GetDppsFeatureInfo(DRMDppsFeatureInfo *info) = 0;
-
-  /*
-   * Get the Panel feature info
-   * [output]: panel feature info data
-   */
-  virtual void GetPanelFeature(DRMPanelFeatureInfo *info) = 0;
-
-  /*
-   * Set the Panel feature
-   * [input]: panel feature info data
-   */
-  virtual void SetPanelFeature(const DRMPanelFeatureInfo &info) = 0;
 };
 
 }  // namespace sde_drm

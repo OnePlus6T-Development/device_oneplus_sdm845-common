@@ -1,5 +1,5 @@
 /*
-* Copyright (c) 2014-2021, The Linux Foundation. All rights reserved.
+* Copyright (c) 2014 - 2019, 2021 The Linux Foundation. All rights reserved.
 *
 * Redistribution and use in source and binary forms, with or without modification, are permitted
 * provided that the following conditions are met:
@@ -33,7 +33,6 @@
 
 #include <stdint.h>
 #include <utils/constants.h>
-#include <utils/fence.h>
 
 #include <vector>
 #include <utility>
@@ -85,8 +84,11 @@ enum LayerComposition {
                             //!< This composition type is used only if GPUTarget layer is provided
                             //!< in a composition cycle.
 
-  kCompositionStitch,       //!< This layer will be drawn onto the target buffer by GPU. No blend
-                            //!< required.
+  kCompositionGPUS3D,       //!< This layer will be drawn onto the target buffer in s3d mode by GPU.
+                            //!< Display device will mark the layer for GPU composition if it can
+                            //!< not handle composition for it.
+                            //!< This composition type is used only if GPUTarget layer is provided
+                            //!< in a composition cycle.
 
   kCompositionSDE,          //!< This layer will be composed by SDE. It must not be composed by
                             //!< GPU or Blit.
@@ -94,6 +96,16 @@ enum LayerComposition {
   kCompositionCursor,       // This cursor layer can receive async position updates irrespective of
                             // dedicated h/w cursor usage. It must not be composed by GPU or Blit
 
+  kCompositionHybrid,       //!< This layer will be drawn by a blit engine and SDE together.
+                            //!< Display device will split the layer, update the blit rectangle
+                            //!< that need to be composed by a blit engine and update original
+                            //!< source rectangle that will be composed by SDE.
+                            //!< This composition type is used only if GPUTarget and BlitTarget
+                            //!< layers are provided in a composition cycle.
+
+  kCompositionBlit,         //!< This layer will be composed using Blit Engine.
+                            //!< This composition type is used only if BlitTarget layer is provided
+                            //!< in a composition cycle.
   kCompositionNone,         //!< This layer will not be composed by any hardware.
 
   /* === List of composition types set by Client === */
@@ -113,8 +125,13 @@ enum LayerComposition {
                             //!< GPU target layer shall be placed after all application layers
                             //!< in the layer stack.
 
-  kCompositionStitchTarget,  //!< This layer will hold result of composition for layers marked fo
-                             //!< Blit composition.
+  kCompositionBlitTarget,   //!< This layer will hold result of composition for blit rectangles
+                            //!< from the layers marked for hybrid composition. Nth blit rectangle
+                            //!< in a layer shall be composed onto Nth blit target.
+                            //!< If display device does not set any layer for hybrid composition
+                            //!< then this would be ignored.
+                            //!< Blit target layers shall be placed after GPUTarget in the layer
+                            //!< stack.
 };
 
 enum LayerUpdate {
@@ -123,9 +140,9 @@ enum LayerUpdate {
   kSurfaceDamage,
   kSurfaceInvalidate,
   kClientCompRequest,
-  kColorTransformUpdate,
   kLayerUpdateMax,
 };
+
 
 /*! @brief This structure defines rotation and flip values for a display layer.
 
@@ -175,16 +192,14 @@ struct LayerFlags {
       uint32_t single_buffer : 1;  //!< This flag shall be set by client to indicate that the layer
                                    //!< uses only a single buffer that will not be swapped out
 
-      uint32_t color_transform : 1;  //!< This flag will be set by SDM when the layer
-                                     //!< has a custom matrix
-
-      uint32_t is_game : 1;  //!< This flag shall be set by client to indicate that this layer
-                             //!< is a game layer.
-
       uint32_t sde_preferred : 1;  //! This flag shall be set by client to indicate that this layer
                                    //! will be composed by display device, layer with this flag
                                    //! will have highest priority. To be used by OEMs only.
+
 #ifdef FOD_ZPOS
+      uint32_t reserved : 25;      //!< This flag reserves the remaining 4 * 8 - (6 + 1) bits to
+                                   //!< avoid future ABI breakage
+
       uint32_t fod_pressed : 1;    //!< This flag shall be set internally to mark the fod pressed
                                    //!< layer
 #endif
@@ -210,12 +225,6 @@ struct LayerRequestFlags {
                                    //!< destination tone map
       uint32_t src_tone_map: 1;    //!< This flag will be set by SDM when the layer needs
                                    //!< source tone map.
-      uint32_t rc: 1;  //!< This flag will be set by SDM when the layer is drawn by RC HW.
-      uint32_t update_format: 1;   //!< This flag will be set by SDM when layer format is updated
-                                   //!< The buffer format is mentioned in the LayerRequest Format
-      uint32_t update_color_metadata: 1;   //!< This flag will be set by SDM when layer color
-                                           //!< metadata is updated. The color metadata is
-                                           //!< mentioned in the LayerRequest Format
     };
     uint32_t request_flags = 0;  //!< For initialization purpose only.
                                  //!< Shall not be refered directly.
@@ -231,16 +240,9 @@ struct LayerRequestFlags {
 */
 struct LayerRequest {
   LayerRequestFlags flags;  // Flags associated with this request
-  LayerBufferFormat format = kFormatRGBA8888;  // Requested format - Used with tone_map and
-                                               // update_format flags
-  ColorMetaData color_metadata = { .colorPrimaries = ColorPrimaries_BT709_5,
-                                   .range = Range_Full,
-                                   .transfer = Transfer_sRGB };
-                                  // Requested color metadata
-  uint32_t width = 0;   // Requested unaligned width.
-                        // Used with tone_map flag
+  LayerBufferFormat format = kFormatRGBA8888;  // Requested format
+  uint32_t width = 0;  // Requested unaligned width.
   uint32_t height = 0;  // Requested unalighed height
-                        // Used with tone_map flag
 };
 
 /*! @brief This structure defines flags associated with a layer stack. The 1-bit flag can be set to
@@ -288,13 +290,11 @@ struct LayerStackFlags {
 
       uint32_t fast_path : 1;    //!< Preference for fast/slow path draw-cycle, set by client.
 
-      uint32_t mask_present : 1;  //!< Set if layer stack has mask layers.
-
       uint32_t config_changed : 1;  //!< This flag indicates Display config must be validated.
 
-      uint32_t scaling_rgb_layer_present : 1; //!< This flag indicates scaling rgb layer presense
+      uint32_t mask_present : 1;  //!< Set if layer stack has mask layers.
 
-      uint32_t fod_pressed_present : 1;
+      uint32_t scaling_rgb_layer_present : 1;  //!< Set if scaling rgb layer is present
     };
 
     uint32_t flags = 0;               //!< For initialization purpose only.
@@ -332,13 +332,6 @@ struct LayerRect {
 struct LayerRectArray {
   LayerRect *rect = NULL;  //!< Pointer to first element of array.
   uint32_t count = 0;      //!< Number of elements in the array.
-};
-
-struct LayerStitchInfo {
-  LayerRect dst_rect = {};          //!< The target position where the frame will be
-                                    //!< rendered onto internal FrameBuffer.
-
-  LayerRect slice_rect = {};        //!<  Target slice that this stitch rect belongs to.
 };
 
 /*! @brief This structure defines solidfill structure.
@@ -384,10 +377,6 @@ struct Layer {
                                                    //!< fit into this rectangle. The origin is the
                                                    //!< top-left corner of the screen.
 
-  LayerStitchInfo stitch_info = {};                //!< This structure defines all parameters needed
-                                                   //!< for stitching like position to render,
-                                                   //!< boundaries etc;
-
   std::vector<LayerRect> visible_regions = {};     //!< Visible rectangular areas in screen space.
                                                    //!< The visible region includes areas overlapped
                                                    //!< by a translucent layer.
@@ -395,6 +384,13 @@ struct Layer {
   std::vector<LayerRect> dirty_regions = {};       //!< Rectangular areas in the current frames
                                                    //!< that have changed in comparison to
                                                    //!< previous frame.
+
+  std::vector<LayerRect> blit_regions = {};        //!< Rectangular areas of this layer which need
+                                                   //!< to be composed to blit target. Display
+                                                   //!< device will update blit rectangles if a
+                                                   //!< layer composition is set as hybrid. Nth blit
+                                                   //!< rectangle shall be composed onto Nth blit
+                                                   //!< target.
 
   LayerBlending blending = kBlendingPremultiplied;  //!< Blending operation which need to be
                                                     //!< applied on the layer buffer during
@@ -427,10 +423,6 @@ struct Layer {
                                                    //!< needed on this layer.
   LayerSolidFill solid_fill_info = {};             //!< solid fill info along with depth.
   std::shared_ptr<LayerBufferMap> buffer_map = nullptr;  //!< Map of handle_id and fb_id.
-  float color_transform_matrix[kColorTransformMatrixSize] = { 1.0, 0.0, 0.0, 0.0,
-                                                              0.0, 1.0, 0.0, 0.0,
-                                                              0.0, 0.0, 1.0, 0.0,
-                                                              0.0, 0.0, 0.0, 1.0 };
   std::bitset<kLayerUpdateMax> update_mask = 0;
 };
 
@@ -459,8 +451,7 @@ struct PrimariesTransfer {
 struct LayerStack {
   std::vector<Layer *> layers = {};    //!< Vector of layer pointers.
 
-  shared_ptr<Fence> retire_fence = nullptr;
-                                       //!< File descriptor referring to a sync fence object which
+  int retire_fence_fd = -1;            //!< File descriptor referring to a sync fence object which
                                        //!< will be signaled when this composited frame has been
                                        //!< replaced on screen by a subsequent frame on a physical
                                        //!< display. The fence object is created and returned during
@@ -476,12 +467,8 @@ struct LayerStack {
 
 
   PrimariesTransfer blend_cs = {};     //!< o/p - Blending color space of the frame, updated by SDM
-
-  uint64_t elapse_timestamp = 0;       //!< system time until which display commit needs to be held
-
 };
 
 }  // namespace sdm
 
 #endif  // __LAYER_STACK_H__
-

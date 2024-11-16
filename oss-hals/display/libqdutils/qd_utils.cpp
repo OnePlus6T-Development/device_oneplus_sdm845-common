@@ -84,6 +84,7 @@ static int getExternalNode(const char *type) {
     return -1;
 }
 
+
 bool isDPConnected() {
     char connectPath[MAX_FRAME_BUFFER_NAME_SIZE];
     FILE *connectFile = NULL;
@@ -162,6 +163,12 @@ int getDPTestConfig(uint32_t *panelBpp, uint32_t *patternType) {
     return 0;
 }
 
+DriverType getDriverType() {
+    const char *fb_caps = "/sys/devices/virtual/graphics/fb0/mdp/caps";
+    // 0 - File exists
+    return access(fb_caps, F_OK) ? DriverType::DRM : DriverType::FB;
+}
+
 const char *GetHALPixelFormatString(int format) {
   switch (format) {
   case HAL_PIXEL_FORMAT_RGBA_8888:
@@ -234,8 +241,6 @@ const char *GetHALPixelFormatString(int format) {
     return "YCbCr_420_TP10_UBWC";
   case HAL_PIXEL_FORMAT_YCbCr_420_P010_VENUS:
     return "YCbCr_420_P010_VENUS";
-  case HAL_PIXEL_FORMAT_RGBA_FP16:
-    return "PIXEL_FORMAT_RGBA_FP16";
   default:
     return "Unknown_format";
   }

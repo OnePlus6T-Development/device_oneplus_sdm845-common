@@ -121,9 +121,10 @@ class QtiMapper : public IQtiMapper {
     /* Name length is variable, need to store string prepended with size
      * The rest of the packet size is constant
      */
-    out.resize(gralloc::kBufferDescriptorSizeV4 + sizeof(name_size) + name_size);
+    out.resize(gralloc::kBufferDescriptorSizeV4 + sizeof(name_size) +
+               static_cast<size_t>(name_size));
 
-    int index = 0;
+    size_t index = 0;
     uint32_t magic_version = gralloc::kMagicVersion;
     std::memcpy(&out[index], &magic_version, sizeof(magic_version));
     index += sizeof(magic_version);
@@ -160,7 +161,7 @@ class QtiMapper : public IQtiMapper {
       return gralloc::Error::BAD_DESCRIPTOR;
     }
 
-    int index = 0;
+    size_t index = 0;
     uint32_t magic_version;
     std::memcpy(&magic_version, &in[index], sizeof(magic_version));
     index += sizeof(magic_version);
@@ -177,12 +178,12 @@ class QtiMapper : public IQtiMapper {
 
     std::string name;
 
-    name.resize(name_size);
+    name.resize(static_cast<size_t>(name_size));
     std::memcpy(name.data(), &in[index], name.size());
     index += name_size;
     buf_descriptor->SetName(name);
 
-    uint32_t width, height;
+    int32_t width, height;
     std::memcpy(&width, &in[index], sizeof(width));
 
     index += sizeof(width);
@@ -195,7 +196,7 @@ class QtiMapper : public IQtiMapper {
     index += sizeof(layer_count);
     buf_descriptor->SetLayerCount(layer_count);
 
-    uint32_t format;
+    int32_t format;
     std::memcpy(&format, &in[index], sizeof(format));
     index += sizeof(format);
     buf_descriptor->SetColorFormat(format);

@@ -1,5 +1,5 @@
 /*
-* Copyright (c) 2014 - 2018, 2020 The Linux Foundation. All rights reserved.
+* Copyright (c) 2014 - 2018, The Linux Foundation. All rights reserved.
 *
 * Redistribution and use in source and binary forms, with or without
 * modification, are permitted provided that the following conditions are
@@ -46,6 +46,7 @@ class Debug {
   static int GetSimulationFlag();
   static bool GetExternalResolution(char *val);
   static void GetIdleTimeoutMs(uint32_t *active_ms, uint32_t *inactive_ms);
+  static int GetBootAnimLayerCount();
   static bool IsRotatorDownScaleDisabled();
   static bool IsDecimationDisabled();
   static int GetMaxPipesPerMixer(DisplayType display_type);
@@ -60,7 +61,6 @@ class Debug {
   static bool IsPartialSplitDisabled();
   static bool IsSrcSplitPreferred();
   static DisplayError GetMixerResolution(uint32_t *width, uint32_t *height);
-  static DisplayError GetWindowRect(float *left, float *top, float *right, float *bottom);
   static DisplayError GetReducedConfig(uint32_t *num_vig_pipes, uint32_t *num_dma_pipes);
   static int GetExtMaxlayers();
   static DisplayError GetProperty(const char *property_name, char *value);

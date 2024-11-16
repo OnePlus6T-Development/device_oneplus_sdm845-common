@@ -1,5 +1,5 @@
 /*
-* Copyright (c) 2014-2021, The Linux Foundation. All rights reserved.
+* Copyright (c) 2014-2020, The Linux Foundation. All rights reserved.
 *
 * Redistribution and use in source and binary forms, with or without modification, are permitted
 * provided that the following conditions are met:
@@ -22,51 +22,12 @@
 * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
-/*
-* Changes from Qualcomm Innovation Center are provided under the following license:
-*
-* Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
-*
-* Redistribution and use in source and binary forms, with or without
-* modification, are permitted (subject to the limitations in the
-* disclaimer below) provided that the following conditions are met:
-*
-*    * Redistributions of source code must retain the above copyright
-*      notice, this list of conditions and the following disclaimer.
-*
-*    * Redistributions in binary form must reproduce the above
-*      copyright notice, this list of conditions and the following
-*      disclaimer in the documentation and/or other materials provided
-*      with the distribution.
-*
-*    * Neither the name of Qualcomm Innovation Center, Inc. nor the names of its
-*      contributors may be used to endorse or promote products derived
-*      from this software without specific prior written permission.
-*
-* NO EXPRESS OR IMPLIED LICENSES TO ANY PARTY'S PATENT RIGHTS ARE
-* GRANTED BY THIS LICENSE. THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT
-* HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED
-* WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF
-* MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED.
-* IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR
-* ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
-* DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE
-* GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-* INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER
-* IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR
-* OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
-* IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-*/
-
 #ifndef __DISPLAY_BASE_H__
 #define __DISPLAY_BASE_H__
 
 #include <core/display_interface.h>
 #include <private/strategy_interface.h>
 #include <private/color_interface.h>
-#include <private/rc_intf.h>
-#include <private/panel_feature_property_intf.h>
-#include <private/panel_feature_factory_intf.h>
 
 #include <map>
 #include <mutex>
@@ -86,11 +47,13 @@ using std::lock_guard;
 class DisplayBase : public DisplayInterface {
  public:
   DisplayBase(DisplayType display_type, DisplayEventHandler *event_handler,
-              HWDeviceType hw_device_type, BufferAllocator *buffer_allocator,
-              CompManager *comp_manager, HWInfoInterface *hw_info_intf);
+              HWDeviceType hw_device_type, BufferSyncHandler *buffer_sync_handler,
+              BufferAllocator *buffer_allocator, CompManager *comp_manager,
+              HWInfoInterface *hw_info_intf);
   DisplayBase(int32_t display_id, DisplayType display_type, DisplayEventHandler *event_handler,
-              HWDeviceType hw_device_type, BufferAllocator *buffer_allocator,
-              CompManager *comp_manager, HWInfoInterface *hw_info_intf);
+              HWDeviceType hw_device_type, BufferSyncHandler *buffer_sync_handler,
+              BufferAllocator *buffer_allocator, CompManager *comp_manager,
+              HWInfoInterface *hw_info_intf);
   virtual ~DisplayBase() { }
   virtual DisplayError Init();
   virtual DisplayError Deinit();
@@ -104,7 +67,7 @@ class DisplayBase : public DisplayInterface {
   virtual DisplayError GetActiveConfig(uint32_t *index);
   virtual DisplayError GetVSyncState(bool *enabled);
   virtual DisplayError SetDisplayState(DisplayState state, bool teardown,
-                                       shared_ptr<Fence> *release_fence);
+                                       int *release_fence);
   virtual DisplayError SetActiveConfig(uint32_t index);
   virtual DisplayError SetActiveConfig(DisplayConfigVariableInfo *variable_info) {
     return kErrorNotSupported;
@@ -125,7 +88,9 @@ class DisplayBase : public DisplayInterface {
   virtual DisplayError SetPanelBrightness(float brightness) {
     return kErrorNotSupported;
   }
-  virtual DisplayError OnMinHdcpEncryptionLevelChange(uint32_t min_enc_level);
+  virtual DisplayError OnMinHdcpEncryptionLevelChange(uint32_t min_enc_level) {
+    return kErrorNotSupported;
+  }
   virtual DisplayError ColorSVCRequestRoute(const PPDisplayAPIPayload &in_payload,
                                             PPDisplayAPIPayload *out_payload,
                                             PPPendingParams *pending_action);
@@ -149,17 +114,13 @@ class DisplayBase : public DisplayInterface {
   virtual DisplayError GetColorModeName(int32_t mode_id, std::string *mode_name);
   virtual DisplayError SetColorTransform(const uint32_t length, const double *color_transform);
   virtual DisplayError GetDefaultColorMode(std::string *color_mode);
-  virtual DisplayError ApplyDefaultDisplayMode(void);
   virtual DisplayError SetCursorPosition(int x, int y);
   virtual DisplayError GetRefreshRateRange(uint32_t *min_refresh_rate, uint32_t *max_refresh_rate);
   virtual DisplayError GetPanelBrightness(float *brightness) {
     return kErrorNotSupported;
   }
-  virtual DisplayError GetPanelMaxBrightness(uint32_t *max_brightness_level) {
-    return kErrorNotSupported;
-  }
   virtual DisplayError SetVSyncState(bool enable);
-  virtual void SetIdleTimeoutMs(uint32_t active_ms, uint32_t inactive_ms) {}
+  virtual void SetIdleTimeoutMs(uint32_t active_ms) {}
   virtual DisplayError SetMixerResolution(uint32_t width, uint32_t height);
   virtual DisplayError GetMixerResolution(uint32_t *width, uint32_t *height);
   virtual DisplayError SetFrameBufferConfig(const DisplayConfigVariableInfo &variable_info);
@@ -188,28 +149,13 @@ class DisplayBase : public DisplayInterface {
   virtual bool IsSupportSsppTonemap();
   virtual DisplayError GetDisplayIdentificationData(uint8_t *out_port, uint32_t *out_data_size,
                                                     uint8_t *out_data);
-  virtual DisplayError SetFrameTriggerMode(FrameTriggerMode mode) {
-    return kErrorNotSupported;
-  }
-  virtual DisplayError GetRefreshRate(uint32_t *refresh_rate) { return kErrorNotSupported; }
   virtual bool CanSkipValidate();
-  virtual DisplayError SetBLScale(uint32_t level) { return kErrorNotSupported; }
-  virtual bool CheckResourceState();
-  virtual bool GameEnhanceSupported();
-  virtual DisplayError GetQSyncMode(QSyncMode *qsync_mode) { return kErrorNotSupported; }
-  virtual DisplayError colorSamplingOn();
-  virtual DisplayError colorSamplingOff();
+  virtual DisplayError GetRefreshRate(uint32_t *refresh_rate) { return kErrorNotSupported; }
   virtual DisplayError ReconfigureDisplay();
-  virtual DisplayError ClearLUTs() {
-    return kErrorNotSupported;
-  }
-  virtual DisplayError DelayFirstCommit();
-  QSyncMode active_qsync_mode_ = kQSyncModeNone;
 
  protected:
   const char *kBt2020Pq = "bt2020_pq";
   const char *kBt2020Hlg = "bt2020_hlg";
-  const char *kDisplayBt2020 = "display_bt2020";
   DisplayError BuildLayerStackStats(LayerStack *layer_stack);
   virtual DisplayError ValidateGPUTargetParams();
   void CommitLayerParams(LayerStack *layer_stack);
@@ -224,9 +170,7 @@ class DisplayBase : public DisplayInterface {
   DisplayError ReconfigureMixer(uint32_t width, uint32_t height);
   bool NeedsDownScale(const LayerRect &src_rect, const LayerRect &dst_rect, bool needs_rotation);
   void DeInitializeColorModes();
-  DisplayError SetColorModeInternal(const std::string &color_mode,
-                                    const std::string &str_render_intent,
-                                    const PrimariesTransfer &pt);
+  DisplayError SetColorModeInternal(const std::string &color_mode);
   DisplayError GetValueOfModeAttribute(const AttrVal &attr, const std::string &type,
                                        std::string *value);
   bool IsSupportColorModeAttribute(const std::string &color_mode);
@@ -238,11 +182,10 @@ class DisplayBase : public DisplayInterface {
   bool SetHdrModeAtStart(LayerStack *layer_stack);
   PrimariesTransfer GetBlendSpaceFromColorMode();
   bool IsHdrMode(const AttrVal &attr);
-  void InsertBT2020PqHlgModes(const std::string &str_render_intent);
-  DisplayError SetupRC();
-  DisplayError HandlePendingVSyncEnable(const shared_ptr<Fence> &retire_fence);
-  DisplayError HandlePendingPowerState(const shared_ptr<Fence> &retire_fence);
-
+  void InsertBT2020PqHlgModes();
+  DisplayError HandlePendingVSyncEnable(int32_t retire_fence);
+  DisplayError HandlePendingPowerState(int32_t retire_fence);
+  bool is_idle_timeout_ = false;
   recursive_mutex recursive_mutex_;
   int32_t display_id_ = -1;
   DisplayType display_type_;
@@ -251,6 +194,7 @@ class DisplayBase : public DisplayInterface {
   HWInterface *hw_intf_ = NULL;
   HWPanelInfo hw_panel_info_;
   HWResourceInfo hw_resource_info_ = {};
+  BufferSyncHandler *buffer_sync_handler_ = NULL;
   BufferAllocator *buffer_allocator_ {};
   CompManager *comp_manager_ = NULL;
   DisplayState state_ = kStateOff;
@@ -282,35 +226,29 @@ class DisplayBase : public DisplayInterface {
   uint32_t req_mixer_width_ = 0;
   uint32_t req_mixer_height_ = 0;
   std::string current_color_mode_ = "hal_native";
+  int disable_hdr_lut_gen_ = 0;
   bool hw_recovery_logs_captured_ = false;
   int disable_hw_recovery_dump_ = 0;
-  HWQosData cached_qos_data_;
-  uint32_t default_clock_hz_ = 0;
+  HWQosData default_qos_data_;
   bool drop_hw_vsync_ = false;
   uint32_t current_refresh_rate_ = 0;
   bool drop_skewed_vsync_ = false;
   bool custom_mixer_resolution_ = false;
   bool vsync_enable_pending_ = false;
-  bool pending_doze_ = false;
-  bool pending_power_on_ = false;
   QSyncMode qsync_mode_ = kQSyncModeNone;
   bool needs_avr_update_ = false;
+  bool safe_mode_in_fast_path_ = false;
+  bool pending_doze_ = false;
+  bool pending_power_on_ = false;
 
   static Locker display_power_reset_lock_;
   static bool display_power_reset_pending_;
-  bool rc_panel_feature_init_ = false;
-  bool rc_enable_prop_ = false;
-  PanelFeatureFactoryIntf *pf_factory_ = nullptr;
-  PanelFeaturePropertyIntf *prop_intf_ = nullptr;
-  bool first_cycle_ = true;
 
  private:
   bool StartDisplayPowerReset();
   void EndDisplayPowerReset();
-  void SetRCData(LayerStack *layer_stack);
-  unsigned int rc_cached_res_width_ = 0;
-  unsigned int rc_cached_res_height_ = 0;
-  std::unique_ptr<RCIntf> rc_core_ = nullptr;
+  void SetLutSwapFlag();
+  bool lut_swap_ = false;
 };
 
 }  // namespace sdm

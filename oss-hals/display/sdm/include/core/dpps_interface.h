@@ -1,5 +1,5 @@
 /*
-* Copyright (c) 2018-2019, The Linux Foundation. All rights reserved.
+* Copyright (c) 2018, The Linux Foundation. All rights reserved.
 *
 * Redistribution and use in source and binary forms, with or without
 * modification, are permitted provided that the following conditions are
@@ -31,10 +31,6 @@
 #define __DPPS_INTERFACE_H__
 
 #include <core/sdm_types.h>
-#if !defined(LINUX_COMPILE) && !defined(WIN32) && !defined(_WIN64) && !defined(__APPLE__)
-#include <core/display_interface.h>
-#endif
-
 #include <string>
 
 namespace sdm {
@@ -45,24 +41,12 @@ enum DppsOps {
   kDppsScreenRefresh,
   kDppsPartialUpdate,
   kDppsRequestCommit,
-  kDppsGetDisplayInfo,
   kDppsOpMax,
 };
 
 enum DppsNotifyOps {
   kDppsCommitEvent,
   kDppsNotifyMax,
-};
-
-struct DppsDisplayInfo {
-  uint32_t width;
-  uint32_t height;
-  bool is_primary;
-  int32_t display_id;
-  std::string brightness_base_path;
-#if !defined(LINUX_COMPILE) && !defined(WIN32) && !defined(_WIN64) && !defined(__APPLE__)
-  DisplayType display_type;
-#endif
 };
 
 class DppsPropIntf {

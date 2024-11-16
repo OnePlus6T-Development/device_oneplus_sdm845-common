@@ -1,5 +1,5 @@
 /*
-* Copyright (c) 2017-2021, The Linux Foundation. All rights reserved.
+* Copyright (c) 2017-2019, The Linux Foundation. All rights reserved.
 *
 * Redistribution and use in source and binary forms, with or without
 * modification, are permitted provided that the following conditions are
@@ -108,10 +108,10 @@ static HWQseedStepVersion GetQseedStepVersion(sde_drm::QSEEDStepVersion drm_vers
 
 static InlineRotationVersion GetInRotVersion(sde_drm::InlineRotationVersion drm_version) {
   switch (drm_version) {
-    case sde_drm::InlineRotationVersion::kInlineRotationV1:
+    case sde_drm::InlineRotationVersion::V1:
       return InlineRotationVersion::kInlineRotationV1;
-    case sde_drm::InlineRotationVersion::kInlineRotationV2:
-      return InlineRotationVersion::kInlineRotationV2;
+    case sde_drm::InlineRotationVersion::V1p1:
+      return InlineRotationVersion::kInlineRotationV1p1;
     default:
       return kInlineRotationNone;
   }
@@ -162,13 +162,8 @@ HWInfoDRM::~HWInfoDRM() {
 DisplayError HWInfoDRM::GetDynamicBWLimits(HWResourceInfo *hw_resource) {
   HWDynBwLimitInfo* bw_info = &hw_resource->dyn_bw_info;
   for (int index = 0; index < kBwModeMax; index++) {
-    if (index == kBwVFEOn) {
-      bw_info->total_bw_limit[index] = hw_resource->max_bandwidth_low;
-      bw_info->pipe_bw_limit[index] = hw_resource->max_pipe_bw;
-    } else if (index == kBwVFEOff) {
-      bw_info->total_bw_limit[index] = hw_resource->max_bandwidth_high;
-      bw_info->pipe_bw_limit[index] = hw_resource->max_pipe_bw_high;
-    }
+    bw_info->total_bw_limit[index] = hw_resource->max_bandwidth_low;
+    bw_info->pipe_bw_limit[index] = hw_resource->max_pipe_bw;
   }
 
   return kErrorNone;
@@ -203,15 +198,23 @@ DisplayError HWInfoDRM::GetHWResourceInfo(HWResourceInfo *hw_resource) {
   hw_resource->hw_dest_scalar_info.max_input_width = 0;
   hw_resource->hw_dest_scalar_info.max_output_width = 0;
   hw_resource->is_src_split = true;
+  hw_resource->has_dyn_bw_support = false;
   hw_resource->has_qseed3 = false;
   hw_resource->has_concurrent_writeback = false;
 
   hw_resource->hw_version = SDEVERSION(4, 0, 1);
+  // TODO(user): On FB driver hw_revision comprises of major version, minor version and hw_revision.
+  // On DRM driver, hw_revision is deprecated and hw_version comprises major version, minor version
+  // and hw_revision information. Since QDCM uses hw_revision variable populate hw_revision with
+  // hw_version. Remove hw_revision variable when FB code is deperecated.
+  hw_resource->hw_revision = SDEVERSION(4, 0, 1);
 
   // TODO(user): Deprecate
   hw_resource->max_mixer_width = 2560;
   hw_resource->writeback_index = 0;
+  hw_resource->has_bwc = false;
   hw_resource->has_ubwc = true;
+  hw_resource->has_macrotile = true;
   hw_resource->separate_rotator = true;
   hw_resource->has_non_scalar_rgb = false;
 
@@ -231,8 +234,6 @@ DisplayError HWInfoDRM::GetHWResourceInfo(HWResourceInfo *hw_resource) {
     hw_resource->hw_dest_scalar_info.count = 0;
   }
 
-  DLOGI("Destination scaler %sfound. Block count = %d.", hw_resource->hw_dest_scalar_info.count ?
-        "": "disabled or not ", hw_resource->hw_dest_scalar_info.count);
   DLOGI("Max plane width = %d", hw_resource->max_pipe_width);
   DLOGI("Max cursor width = %d", hw_resource->max_cursor_size);
   DLOGI("Max plane upscale = %d", hw_resource->max_scale_up);
@@ -242,14 +243,12 @@ DisplayError HWInfoDRM::GetHWResourceInfo(HWResourceInfo *hw_resource) {
   DLOGI("Has Source Split = %d", hw_resource->is_src_split);
   DLOGI("Has QSEED3 = %d", hw_resource->has_qseed3);
   DLOGI("Has UBWC = %d", hw_resource->has_ubwc);
-  DLOGI("Has Micro Idle = %d", hw_resource->has_micro_idle);
   DLOGI("Has Concurrent Writeback = %d", hw_resource->has_concurrent_writeback);
-  DLOGI("Has Src Tonemap = %lx", hw_resource->src_tone_map.to_ulong());
-  DLOGI("Max Low Bw = %" PRIu64 "", hw_resource->dyn_bw_info.total_bw_limit[kBwVFEOn]);
-  DLOGI("Max High Bw = %" PRIu64 "", hw_resource->dyn_bw_info.total_bw_limit[kBwVFEOff]);
-  DLOGI("Max Pipe Bw = %" PRIu64 " KBps", hw_resource->dyn_bw_info.pipe_bw_limit[kBwVFEOn]);
-  DLOGI("Max Pipe Bw High= %" PRIu64 " KBps", hw_resource->dyn_bw_info.pipe_bw_limit[kBwVFEOff]);
-  DLOGI("MaxSDEClock = %d Hz", hw_resource->max_sde_clk);
+  DLOGI("Has Src Tonemap = %d", hw_resource->src_tone_map);
+  DLOGI("Max Low Bw = %" PRIu64 "", hw_resource->max_bandwidth_low);
+  DLOGI("Max High Bw = % " PRIu64 "", hw_resource->max_bandwidth_high);
+  DLOGI("Max Pipe Bw = %" PRIu64 " KBps", hw_resource->max_pipe_bw);
+  DLOGI("MaxSDEClock = % " PRIu64 " Hz", hw_resource->max_sde_clk);
   DLOGI("Clock Fudge Factor = %f", hw_resource->clk_fudge_factor);
   DLOGI("Prefill factors:");
   DLOGI("\tTiled_NV12 = %d", hw_resource->macrotile_nv12_factor);
@@ -263,11 +262,19 @@ DisplayError HWInfoDRM::GetHWResourceInfo(HWResourceInfo *hw_resource) {
     GetHWRotatorInfo(hw_resource);
   }
 
-  DLOGI("Has Support for multiple bw limits shown below");
-  for (int index = 0; index < kBwModeMax; index++) {
-    DLOGI("Mode-index=%d  total_bw_limit=%" PRIu64 " and pipe_bw_limit=%" PRIu64, index,
-          hw_resource->dyn_bw_info.total_bw_limit[index],
-          hw_resource->dyn_bw_info.pipe_bw_limit[index]);
+  if (hw_resource->has_dyn_bw_support) {
+    DisplayError ret = GetDynamicBWLimits(hw_resource);
+    if (ret != kErrorNone) {
+      DLOGE("Failed to read dynamic band width info");
+      return ret;
+    }
+
+    DLOGI("Has Support for multiple bw limits shown below");
+    for (int index = 0; index < kBwModeMax; index++) {
+      DLOGI("Mode-index=%d  total_bw_limit=%d and pipe_bw_limit=%d", index,
+            hw_resource->dyn_bw_info.total_bw_limit[index],
+            hw_resource->dyn_bw_info.pipe_bw_limit[index]);
+    }
   }
 
   if (!hw_resource_) {
@@ -298,18 +305,15 @@ void HWInfoDRM::GetSystemInfo(HWResourceInfo *hw_resource) {
   hw_resource->scale_factor = info.downscale_prefill_lines;
   hw_resource->extra_fudge_factor = info.extra_prefill_lines;
   hw_resource->amortizable_threshold = info.amortized_threshold;
-  hw_resource->has_micro_idle = info.has_micro_idle;
-
-  for (int index = 0; index < kBwModeMax; index++) {
-    if (index == kBwVFEOn) {
-      hw_resource->dyn_bw_info.total_bw_limit[index] = info.max_bandwidth_low / kKiloUnit;
-    } else if (index == kBwVFEOff) {
-      hw_resource->dyn_bw_info.total_bw_limit[index] = info.max_bandwidth_high / kKiloUnit;
-    }
-  }
-
+  hw_resource->max_bandwidth_low = info.max_bandwidth_low / kKiloUnit;
+  hw_resource->max_bandwidth_high = info.max_bandwidth_high / kKiloUnit;
   hw_resource->max_sde_clk = info.max_sde_clk;
   hw_resource->hw_version = info.hw_version;
+  // TODO(user): On FB driver hw_revision comprises of major version, minor version and hw_revision.
+  // On DRM driver, hw_revision is deprecated and hw_version comprises major version, minor version
+  // and hw_revision information. Since QDCM uses hw_revision variable populate hw_revision with
+  // hw_version. Remove hw_revision variable when FB code is deperecated.
+  hw_resource->hw_revision = info.hw_version;
 
   std::vector<LayerBufferFormat> sdm_format;
   for (auto &it : info.comp_ratio_rt_map) {
@@ -333,6 +337,10 @@ void HWInfoDRM::GetSystemInfo(HWResourceInfo *hw_resource) {
   hw_resource->min_prefill_lines = info.min_prefill_lines;
   hw_resource->secure_disp_blend_stage = info.secure_disp_blend_stage;
   hw_resource->has_concurrent_writeback = info.concurrent_writeback;
+  // In case driver doesn't report bus width default to 256 bit bus.
+  hw_resource->num_mnocports = info.num_mnocports ? info.num_mnocports : 2;
+  hw_resource->mnoc_bus_width = info.mnoc_bus_width ? info.mnoc_bus_width : 32;
+  hw_resource->use_baselayer_for_stage = info.use_baselayer_for_stage;
   hw_resource->line_width_constraints_count = info.line_width_constraints_count;
   if (info.line_width_constraints_count) {
     auto &width_constraints = hw_resource->line_width_constraints;
@@ -342,13 +350,8 @@ void HWInfoDRM::GetSystemInfo(HWResourceInfo *hw_resource) {
     width_constraints.push_back(std::make_pair(kPipeScalingLimit, info.scaling_limit_index));
     width_constraints.push_back(std::make_pair(kPipeRotationLimit, info.rotation_limit_index));
   }
-  // In case driver doesn't report bus width default to 256 bit bus.
-  hw_resource->num_mnocports = info.num_mnocports ? info.num_mnocports : 2;
-  hw_resource->mnoc_bus_width = info.mnoc_bus_width ? info.mnoc_bus_width : 32;
-  hw_resource->use_baselayer_for_stage = info.use_baselayer_for_stage;
-  hw_resource->ubwc_version = info.ubwc_version;
-  // RC
-  hw_resource->rc_total_mem_size = info.rc_total_mem_size;
+  // Use fudge factor as 1.5 if not reported
+  hw_resource->vbif_cmd_ff = (info.vbif_cmd_ff > 0.0f) ? info.vbif_cmd_ff : 1.5f;
 }
 
 void HWInfoDRM::GetHWPlanesInfo(HWResourceInfo *hw_resource) {
@@ -392,8 +395,6 @@ void HWInfoDRM::GetHWPlanesInfo(HWResourceInfo *hw_resource) {
       }
     }
 
-    // TODO(user): Move pipe caps to pipe_caps structure per pipe. Set default for now.
-    // currently copying values to hw_resource!
     HWPipeCaps pipe_caps;
     string name = {};
     switch (pipe_obj.second.type) {
@@ -402,7 +403,6 @@ void HWInfoDRM::GetHWPlanesInfo(HWResourceInfo *hw_resource) {
         pipe_caps.type = kPipeTypeDMA;
         if (!hw_resource->num_dma_pipe) {
           PopulateSupportedFmts(kHWDMAPipe, pipe_obj.second, hw_resource);
-          PopulatePipeBWCaps(pipe_obj.second, hw_resource);
         }
         hw_resource->num_dma_pipe++;
         break;
@@ -412,7 +412,6 @@ void HWInfoDRM::GetHWPlanesInfo(HWResourceInfo *hw_resource) {
         if (!hw_resource->num_vig_pipe) {
           PopulatePipeCaps(pipe_obj.second, hw_resource);
           PopulateSupportedFmts(kHWVIGPipe, pipe_obj.second, hw_resource);
-          PopulateSupportedInlineFmts(pipe_obj.second, hw_resource);
         }
         hw_resource->num_vig_pipe++;
         break;
@@ -431,9 +430,10 @@ void HWInfoDRM::GetHWPlanesInfo(HWResourceInfo *hw_resource) {
     pipe_caps.id = pipe_obj.first;
     pipe_caps.master_pipe_id = pipe_obj.second.master_plane_id;
     pipe_caps.block_sec_ui = pipe_obj.second.block_sec_ui;
-    DLOGI("Adding %s Pipe : Id %d, master_pipe_id : Id %d block_sec_ui: %d",
+    pipe_caps.hw_block_mask = pipe_obj.second.hw_block_mask;
+    DLOGI("Adding %s Pipe : Id %d, master_pipe_id : Id %d block_sec_ui: %d hw_block_mask: 0x%x",
           name.c_str(), pipe_obj.first, pipe_obj.second.master_plane_id,
-          pipe_obj.second.block_sec_ui);
+          pipe_obj.second.block_sec_ui, pipe_obj.second.hw_block_mask.to_ulong());
     pipe_caps.inverse_pma = pipe_obj.second.inverse_pma;
     pipe_caps.dgm_csc_version = pipe_obj.second.dgm_csc_version;
     // disable src tonemap feature if its disabled using property.
@@ -476,32 +476,13 @@ void HWInfoDRM::PopulatePipeCaps(const sde_drm::DRMPlaneTypeInfo &info,
                                     HWResourceInfo *hw_resource) {
   hw_resource->max_pipe_width = info.max_linewidth;
   hw_resource->max_scaler_pipe_width = info.max_scaler_linewidth;
-  hw_resource->max_rotation_pipe_width = info.max_rotation_linewidth;
   hw_resource->max_scale_down = info.max_downscale;
   hw_resource->max_scale_up = info.max_upscale;
-  hw_resource->has_decimation = info.max_horizontal_deci > 0 && info.max_vertical_deci > 0;
-
-  PopulatePipeBWCaps(info, hw_resource);
-
+  hw_resource->has_decimation = info.max_horizontal_deci > 1 && info.max_vertical_deci > 1;
+  hw_resource->max_pipe_bw = info.max_pipe_bandwidth / kKiloUnit;
   hw_resource->cache_size = info.cache_size;
   hw_resource->pipe_qseed3_version = GetQseedStepVersion(info.qseed3_version);
-  hw_resource->inline_rot_info.inrot_version = GetInRotVersion(info.inrot_version);
-  if (info.true_inline_dwnscale_rt_denom > 0 && info.true_inline_dwnscale_rt_num > 0 &&
-       info.true_inline_dwnscale_rt_num >= info.true_inline_dwnscale_rt_denom) {
-    hw_resource->inline_rot_info.max_downscale_rt =
-      info.true_inline_dwnscale_rt_num / info.true_inline_dwnscale_rt_denom;
-  }
-}
-
-void HWInfoDRM::PopulatePipeBWCaps(const sde_drm::DRMPlaneTypeInfo &info,
-                                    HWResourceInfo *hw_resource) {
-  for (int index = 0; index < kBwModeMax; index++) {
-    if (index == kBwVFEOn) {
-      hw_resource->dyn_bw_info.pipe_bw_limit[index] = info.max_pipe_bandwidth / kKiloUnit;
-    } else if (index == kBwVFEOff) {
-      hw_resource->dyn_bw_info.pipe_bw_limit[index] = info.max_pipe_bandwidth_high / kKiloUnit;
-    }
-  }
+  hw_resource->inrot_version = GetInRotVersion(info.inrot_version);
 }
 
 void HWInfoDRM::PopulateSupportedFmts(HWSubBlockType sub_blk_type,
@@ -519,15 +500,6 @@ void HWInfoDRM::PopulateSupportedFmts(HWSubBlockType sub_blk_type,
   }
 }
 
-void HWInfoDRM::PopulateSupportedInlineFmts(const sde_drm::DRMPlaneTypeInfo &info,
-                                 HWResourceInfo *hw_resource) {
-  vector<LayerBufferFormat> *inrot_fmts = &hw_resource->inline_rot_info.inrot_fmts_supported;
-
-  for (auto &fmts : info.inrot_fmts_supported) {
-    GetSDMFormat(fmts.first, fmts.second, inrot_fmts);
-  }
-}
-
 void HWInfoDRM::GetWBInfo(HWResourceInfo *hw_resource) {
   HWSubBlockType sub_blk_type = kHWWBIntfOutput;
   vector<LayerBufferFormat> supported_sdm_formats;
@@ -537,9 +509,7 @@ void HWInfoDRM::GetWBInfo(HWResourceInfo *hw_resource) {
   // Fake register
   ret = drm_mgr_intf_->RegisterDisplay(sde_drm::DRMDisplayType::VIRTUAL, &token);
   if (ret) {
-    if (ret != -ENODEV) {
-      DLOGE("Failed registering display %d. Error: %d.", sde_drm::DRMDisplayType::VIRTUAL, ret);
-    }
+    DLOGE("Failed registering display %d. Error: %d.", sde_drm::DRMDisplayType::VIRTUAL, ret);
     return;
   }
 
@@ -660,6 +630,7 @@ DisplayError HWInfoDRM::GetHWRotatorInfo(HWResourceInfo *hw_resource) {
     if (Sys::getline_(fs, line) && (!strncmp(line.c_str(), "sde_rotator", strlen("sde_rotator")))) {
       hw_resource->hw_rot_info.device_path = string("/dev/video" + to_string(i));
       hw_resource->hw_rot_info.num_rotator++;
+      hw_resource->hw_rot_info.type = HWRotatorInfo::ROT_TYPE_V4L2;
       hw_resource->hw_rot_info.has_downscale = true;
       GetRotatorSupportedFormats(i, hw_resource);
 
@@ -795,10 +766,25 @@ void HWInfoDRM::GetSDMFormat(uint32_t drm_format, uint64_t drm_format_modifier,
 }
 
 DisplayError HWInfoDRM::GetFirstDisplayInterfaceType(HWDisplayInterfaceInfo *hw_disp_info) {
+  HWDisplaysInfo hw_displays_info;
+  DisplayError error = kErrorNone;
+
   hw_disp_info->type = kBuiltIn;
   hw_disp_info->is_connected = true;
 
-  return kErrorNone;
+  error = GetDisplaysStatus(&hw_displays_info);
+  if (error == kErrorNone) {
+    for (auto &iter : hw_displays_info) {
+      auto &info = iter.second;
+      if (info.is_primary) {
+        hw_disp_info->type = info.display_type;
+        hw_disp_info->is_connected = info.is_connected;
+        break;
+      }
+    }
+  }
+
+  return error;
 }
 
 DisplayError HWInfoDRM::GetDisplaysStatus(HWDisplaysInfo *hw_displays_info) {

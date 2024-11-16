@@ -1,5 +1,5 @@
 /*
-* Copyright (c) 2014 - 2020, The Linux Foundation. All rights reserved.
+* Copyright (c) 2014 - 2019, The Linux Foundation. All rights reserved.
 *
 * Redistribution and use in source and binary forms, with or without modification, are permitted
 * provided that the following conditions are met:
@@ -33,8 +33,7 @@
 
 namespace sdm {
 
-Strategy::Strategy(ExtensionInterface *extension_intf,
-                   BufferAllocator *buffer_allocator,
+Strategy::Strategy(ExtensionInterface *extension_intf, BufferAllocator *buffer_allocator,
                    int32_t display_id, DisplayType type, const HWResourceInfo &hw_resource_info,
                    const HWPanelInfo &hw_panel_info, const HWMixerAttributes &mixer_attributes,
                    const HWDisplayAttributes &display_attributes,
@@ -123,6 +122,8 @@ DisplayError Strategy::Stop() {
 }
 
 DisplayError Strategy::GetNextStrategy(StrategyConstraints *constraints) {
+  DTRACE_SCOPED();
+
   if (extn_start_success_) {
     return strategy_intf_->GetNextStrategy(constraints);
   }
@@ -252,9 +253,9 @@ DisplayError Strategy::Purge() {
   return kErrorNone;
 }
 
-DisplayError Strategy::SetIdleTimeoutMs(uint32_t active_ms, uint32_t inactive_ms) {
+DisplayError Strategy::SetIdleTimeoutMs(uint32_t active_ms) {
   if (strategy_intf_) {
-    return strategy_intf_->SetIdleTimeoutMs(active_ms, inactive_ms);
+    return strategy_intf_->SetIdleTimeoutMs(active_ms);
   }
 
   return kErrorNotSupported;
@@ -274,18 +275,11 @@ DisplayError Strategy::SetBlendSpace(const PrimariesTransfer &blend_space) {
   return kErrorNotSupported;
 }
 
-bool Strategy::CanSkipValidate(bool *need_buffer_swap) {
+bool Strategy::CanSkipValidate() {
   if (strategy_intf_) {
-    return strategy_intf_->CanSkipValidate(need_buffer_swap);
+    return strategy_intf_->CanSkipValidate();
   }
   return true;
-}
-
-DisplayError Strategy::SwapBuffers() {
-  if (strategy_intf_) {
-    return strategy_intf_->SwapBuffers();
-  }
-  return kErrorNone;
 }
 
 }  // namespace sdm

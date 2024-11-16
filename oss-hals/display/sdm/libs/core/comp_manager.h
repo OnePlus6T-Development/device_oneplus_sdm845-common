@@ -1,5 +1,5 @@
 /*
-* Copyright (c) 2014 - 2020, The Linux Foundation. All rights reserved.
+* Copyright (c) 2014 - 2019, The Linux Foundation. All rights reserved.
 *
 * Redistribution and use in source and binary forms, with or without modification, are permitted
 * provided that the following conditions are met:
@@ -42,7 +42,8 @@ namespace sdm {
 class CompManager {
  public:
   DisplayError Init(const HWResourceInfo &hw_res_info_, ExtensionInterface *extension_intf,
-                    BufferAllocator *buffer_allocator, SocketHandler *socket_handler);
+                    BufferAllocator *buffer_allocator, BufferSyncHandler *buffer_sync_handler,
+                    SocketHandler *socket_handler);
   DisplayError Deinit();
   DisplayError RegisterDisplay(int32_t display_id, DisplayType type,
                                const HWDisplayAttributes &display_attributes,
@@ -63,7 +64,7 @@ class CompManager {
   DisplayError ReConfigure(Handle display_ctx, HWLayers *hw_layers);
   DisplayError PostCommit(Handle display_ctx, HWLayers *hw_layers);
   void Purge(Handle display_ctx);
-  DisplayError SetIdleTimeoutMs(Handle display_ctx, uint32_t active_ms, uint32_t inactive_ms);
+  DisplayError SetIdleTimeoutMs(Handle display_ctx, uint32_t active_ms);
   void ProcessIdleTimeout(Handle display_ctx);
   void ProcessThermalEvent(Handle display_ctx, int64_t thermal_level);
   void ProcessIdlePowerCollapse(Handle display_ctx);
@@ -71,8 +72,7 @@ class CompManager {
   void ControlPartialUpdate(Handle display_ctx, bool enable);
   DisplayError ValidateScaling(const LayerRect &crop, const LayerRect &dst, bool rotate90);
   DisplayError ValidateAndSetCursorPosition(Handle display_ctx, HWLayers *hw_layers, int x, int y);
-  bool SetDisplayState(Handle display_ctx, DisplayState state,
-                       const shared_ptr<Fence> &sync_handle);
+  bool SetDisplayState(Handle display_ctx, DisplayState state, int sync_handle);
   DisplayError SetMaxBandwidthMode(HWBwModes mode);
   DisplayError GetScaleLutConfig(HWScaleLutInfo *lut_info);
   DisplayError SetDetailEnhancerData(Handle display_ctx, const DisplayDetailEnhancerData &de_data);
@@ -84,14 +84,10 @@ class CompManager {
   DisplayError SetBlendSpace(Handle display_ctx, const PrimariesTransfer &blend_space);
   void HandleSecureEvent(Handle display_ctx, SecureEvent secure_event);
   void SetSafeMode(bool enable) { safe_mode_ = enable; }
-  bool CanSkipValidate(Handle display_ctx, bool *needs_buffer_swap);
   bool IsSafeMode() { return safe_mode_; }
   void GenerateROI(Handle display_ctx, HWLayers *hw_layers);
+  bool CanSkipValidate(Handle display_ctx);
   DisplayError CheckEnforceSplit(Handle comp_handle, uint32_t new_refresh_rate);
-  DppsControlInterface* GetDppsControlIntf() { return dpps_ctrl_intf_; }
-  bool CheckResourceState(Handle display_ctx);
-  bool IsRotatorSupportedFormat(LayerBufferFormat format);
-  DisplayError SwapBuffers(Handle display_ctx);
 
  private:
   static const int kMaxThermalLevel = 3;
@@ -116,8 +112,6 @@ class CompManager {
     bool is_primary_panel = false;
     PUConstraints pu_constraints = {};
     DisplayConfigVariableInfo fb_config = {};
-    bool first_cycle_ = true;
-    uint32_t dest_scaler_blocks_used = 0;
   };
 
   Locker locker_;
@@ -131,6 +125,7 @@ class CompManager {
   HWResourceInfo hw_res_info_;
   BufferAllocator *buffer_allocator_ = NULL;
   ExtensionInterface *extension_intf_ = NULL;
+  uint32_t max_layers_ = kMaxSDELayers;
   uint32_t max_sde_ext_layers_ = 0;
   uint32_t max_sde_builtin_layers_ = 2;
   DppsControlInterface *dpps_ctrl_intf_ = NULL;
