@@ -189,7 +189,7 @@ VENDOR_SECURITY_PATCH := 2021-11-01
 
 # Sepolicy
 include device/lineage/sepolicy/libperfmgr/sepolicy.mk
-include device/qcom/sepolicy_vndr/SEPolicy.mk
+include device/oneplus/sdm845-common/sepolicy/sepolicy_vndr/SEPolicy.mk
 
 BOARD_VENDOR_SEPOLICY_DIRS += $(COMMON_PATH)/sepolicy/vendor
 PRODUCT_PUBLIC_SEPOLICY_DIRS += $(COMMON_PATH)/sepolicy/public
