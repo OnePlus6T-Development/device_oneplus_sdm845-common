@@ -67,11 +67,11 @@ BOARD_USES_QCOM_HARDWARE := true
 TARGET_BOARD_PLATFORM := sdm845
 
 # Properties
-TARGET_ODM_PROP += $(COMMON_PATH)/odm.prop
-TARGET_PRODUCT_PROP += $(COMMON_PATH)/product.prop
-TARGET_SYSTEM_EXT_PROP += $(COMMON_PATH)/system_ext.prop
-TARGET_SYSTEM_PROP += $(COMMON_PATH)/system.prop
-TARGET_VENDOR_PROP += $(COMMON_PATH)/vendor.prop
+TARGET_ODM_PROP += $(COMMON_PATH)/configs/props/odm.prop
+TARGET_PRODUCT_PROP += $(COMMON_PATH)/configs/props/product.prop
+TARGET_SYSTEM_EXT_PROP += $(COMMON_PATH)/configs/props/system_ext.prop
+TARGET_SYSTEM_PROP += $(COMMON_PATH)/configs/props/system.prop
+TARGET_VENDOR_PROP += $(COMMON_PATH)/configs/props/vendor.prop
 
 # Treble
 BOARD_VNDK_VERSION := current
@@ -114,16 +114,16 @@ TARGET_USES_FOD_ZPOS := true
 TARGET_ENABLE_MEDIADRM_64 := true
 
 # Filesystem
-TARGET_FS_CONFIG_GEN := $(COMMON_PATH)/config.fs
+TARGET_FS_CONFIG_GEN := $(COMMON_PATH)/configs/config.fs
 
 # HIDL
 DEVICE_FRAMEWORK_COMPATIBILITY_MATRIX_FILE := \
-    $(COMMON_PATH)/framework_compatibility_matrix.xml \
+    $(COMMON_PATH)/configs/vintf/framework_compatibility_matrix.xml \
     hardware/qcom-caf/common/vendor_framework_compatibility_matrix.xml \
     hardware/qcom-caf/common/vendor_framework_compatibility_matrix_legacy.xml \
     vendor/lineage/config/device_framework_matrix.xml
-DEVICE_MATRIX_FILE := $(COMMON_PATH)/compatibility_matrix.xml
-DEVICE_MANIFEST_FILE := $(COMMON_PATH)/manifest.xml
+DEVICE_MATRIX_FILE := $(COMMON_PATH)/configs/vintf/compatibility_matrix.xml
+DEVICE_MANIFEST_FILE := $(COMMON_PATH)/configs/vintf/manifest.xml
 
 # Lineage Health
 TARGET_HEALTH_CHARGING_CONTROL_CHARGING_PATH := /sys/class/power_supply/battery/op_disable_charge
