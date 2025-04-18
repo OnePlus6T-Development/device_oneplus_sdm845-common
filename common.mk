@@ -349,7 +349,7 @@ $(call soong_config_set,ONEPLUS_LINEAGE_TOUCH_HAL,INCLUDE_DIR,$(LOCAL_PATH)/touc
 
 # tri-state-key
 PRODUCT_PACKAGES += \
-    KeyHandler
+    KeyHandler.sdm845
 
 # Update engine
 PRODUCT_PACKAGES += \
