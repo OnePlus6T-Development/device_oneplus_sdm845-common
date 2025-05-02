@@ -1,0 +1,7 @@
+# Alert Slider
+/(vendor|system/vendor)/bin/tri-state-key-calibrate    u:object_r:tri-state-key-calibrate_exec:s0
+
+# Engineering
+/mnt/vendor/persist/engineermode(/.*)?    u:object_r:vendor_persist_engineer_file:s0
+ 
+  

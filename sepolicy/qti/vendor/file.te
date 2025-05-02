@@ -1,0 +1,6 @@
+# Alert Slider
+type vendor_proc_tri_state_key, fs_type, proc_type;
+
+# Engineering
+type vendor_proc_engineer, fs_type, proc_type;
+

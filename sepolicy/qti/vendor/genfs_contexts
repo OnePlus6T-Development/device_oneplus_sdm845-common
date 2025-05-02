@@ -1,0 +1,3 @@
+# Alert Slider
+genfscon proc /tristatekey    u:object_r:vendor_proc_tri_state_key:s0
+
