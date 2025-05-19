@@ -9,7 +9,9 @@ from extract_utils.fixups_blob import (
     blob_fixups_user_type,
 )
 from extract_utils.fixups_lib import (
+    lib_fixup_remove,
     lib_fixups,
+    lib_fixup_remove,
     lib_fixups_user_type,
 )
 from extract_utils.main import (
@@ -41,6 +43,9 @@ lib_fixups: lib_fixups_user_type = {
         'vendor.qti.hardware.wifidisplaysession@1.0',
         'vendor.qti.imsrtpservice@3.0',
     ): lib_fixup_vendor_suffix,
+    (
+        'libwpa_client',
+    ): lib_fixup_remove,
 }
 
 blob_fixups: blob_fixups_user_type = {
@@ -58,6 +63,9 @@ blob_fixups: blob_fixups_user_type = {
         .replace_needed('android.hidl.base@1.0.so', 'libhidlbase.so')
         .add_needed('libbinder_shim.so')
         .add_needed('libinput_shim.so'),
+    'system_ext/lib/libwfdservice.so': blob_fixup()
+        .replace_needed('android.media.audio.common.types-V2-cpp.so', 'android.media.audio.common.types-V3-cpp.so')
+        .replace_needed('android.media.audio.common.types-V4-cpp.so', 'android.media.audio.common.types-V3-cpp.so'),
     'vendor/lib/libVDBlurlessAPI_v2.so': blob_fixup()
         .clear_symbol_version('remote_handle_close')
         .clear_symbol_version('remote_handle_invoke')
