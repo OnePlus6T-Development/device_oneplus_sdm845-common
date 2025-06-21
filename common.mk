@@ -99,7 +99,7 @@ PRODUCT_PACKAGES += \
     android.hardware.bluetooth.audio-impl \
     android.hardware.soundtrigger@2.1-impl \
     audio.bluetooth.default \
-    audio.primary.sdm845 \
+    audio.primary.sm8050 \
     audio.r_submix.default \
     audio.usb.default \
     libbatterylistener \
