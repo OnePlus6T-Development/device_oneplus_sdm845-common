@@ -100,7 +100,7 @@ PRODUCT_PACKAGES += \
     android.hardware.bluetooth.audio-impl \
     android.hardware.soundtrigger@2.1-impl \
     audio.bluetooth.default \
-    audio.primary.sdm845 \
+    audio.primary.sm8050 \
     audio.r_submix.default \
     audio.usb.default \
     libbatterylistener \
@@ -184,7 +184,7 @@ PRODUCT_SET_DEBUGFS_RESTRICTIONS := true
 PRODUCT_PACKAGES += \
     android.hardware.graphics.mapper@3.0-impl-qti-display \
     android.hardware.graphics.mapper@4.0-impl-qti-display \
-    gralloc.sdm845 \
+    gralloc.qcom \
     vendor.qti.hardware.display.allocator-service \
     vendor.qti.hardware.display.composer-service \
     vendor.qti.hardware.memtrack-service
