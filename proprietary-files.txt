@@ -573,7 +573,7 @@ vendor/etc/init/vendor.qti.hardware.iop@2.0-service.rc
 vendor/lib64/libqti-iopd-client.so
 vendor/lib64/libqti-iopd.so
 vendor/lib64/vendor.qti.hardware.iop@1.0.so
-vendor/lib64/vendor.qti.hardware.iop@2.0.so
+vendor/lib64/vendor.qti.hardware.iop@2.0.so;MODULE_SUFFIX=_vendor
 
 # IPA firmware
 vendor/etc/init/ipa_fws.rc
@@ -608,10 +608,6 @@ vendor/lib/libmulawdec.so
 vendor/lib/libsmwrapper.so
 
 # Media - from guacamole - GM1911_11_H.38
-system_ext/lib/libmmosal.so|4b81152df596a9ad10938c286e879ec3846f6a27
-system_ext/lib/libmmparser_lite.so|959942cf266f3a8b4d6c775a681347b625690a3a
-system_ext/lib64/libmmosal.so|2864420a9d3727c92a02e3423c9026b07b78481e
-system_ext/lib64/libmmparser_lite.so|e4d53c8b7002a137b5d03eef870a88f5e1db5161
 vendor/lib64/libmmosal.so;MODULE_SUFFIX=_vendor|d40d0c91fcc304e669f1c54540064989ef135d6b
 
 # Neural networks
@@ -677,7 +673,6 @@ vendor/lib64/libqti-perfd.so
 vendor/lib64/libqti-util.so
 
 # Power-off alarm
-product/app/PowerOffAlarm/PowerOffAlarm.apk
 system_ext/framework/vendor.qti.hardware.alarm-V1.0-java.jar
 vendor/bin/hw/vendor.qti.hardware.alarm@1.0-service
 vendor/bin/power_off_alarm

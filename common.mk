@@ -282,6 +282,15 @@ PRODUCT_PACKAGES += \
 PRODUCT_PACKAGES += \
     android.hardware.power-service-qti
 
+# QTI common components
+TARGET_COMMON_QTI_COMPONENTS := \
+    alarm \
+    audio \
+    av \
+    init \
+    overlay \
+    perf
+
 # QTI fwk-detect
 PRODUCT_PACKAGES += \
     libvndfwk_detect_jni.qti.vendor # Needed by CNE app
