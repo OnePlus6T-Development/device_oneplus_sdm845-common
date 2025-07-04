@@ -24,6 +24,7 @@ namespace_imports = [
     'hardware/oneplus',
     'hardware/qcom-caf/sm8050',
     'hardware/qcom-caf/wlan',
+    "vendor/qcom/common/system/av",
     'vendor/qcom/opensource/commonsys-intf/display',
     'vendor/qcom/opensource/commonsys/display',
     'vendor/qcom/opensource/dataservices',
@@ -40,6 +41,7 @@ lib_fixups: lib_fixups_user_type = {
     (
         'com.qualcomm.qti.dpm.api@1.0',
         'libmmosal',
+        'vendor.qti.hardware.iop@2.0',
         'vendor.qti.hardware.wifidisplaysession@1.0',
         'vendor.qti.imsrtpservice@3.0',
     ): lib_fixup_vendor_suffix,
@@ -49,8 +51,6 @@ lib_fixups: lib_fixups_user_type = {
 }
 
 blob_fixups: blob_fixups_user_type = {
-    'product/app/PowerOffAlarm/PowerOffAlarm.apk': blob_fixup()
-        .apktool_patch('blob-patches/PowerOffAlarm.patch', '-r'),
     'system_ext/lib/libwfdmmsrc_system.so': blob_fixup()
         .add_needed('libgui_shim.so'),
     'system_ext/lib/libwfdservice.so': blob_fixup()

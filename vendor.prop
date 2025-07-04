@@ -188,6 +188,13 @@ vendor.pasr.activemode.enabled=true
 vendor.power.pasr.enabled=false
 
 # Perf
+ro.vendor.beluga.c=0x4800
+ro.vendor.beluga.p=0x3
+ro.vendor.beluga.s=0x900
+ro.vendor.beluga.t=0x240
+ro.vendor.perf-hal.ver=2.2
+ro.vendor.perf.scroll_opt=1
+ro.vendor.qspm.enable=true
 ro.vendor.extension_library=libqti-perfd-client.so
 
 # Radio
