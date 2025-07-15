@@ -23,6 +23,7 @@ namespace_imports = [
     'device/oneplus/sdm845-common',
     'hardware/oneplus',
     'hardware/qcom-caf/sm8050',
+    'hardware/qcom-caf/sm8250',
     'hardware/qcom-caf/wlan',
     "vendor/qcom/common/system/av",
     'vendor/qcom/opensource/commonsys-intf/display',
