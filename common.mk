@@ -103,6 +103,7 @@ PRODUCT_PACKAGES += \
     audio.primary.sm8050 \
     audio.r_submix.default \
     audio.usb.default \
+    libaudiohalvendorextn \
     libbatterylistener \
     libcomprcapture \
     libexthwplugin \
