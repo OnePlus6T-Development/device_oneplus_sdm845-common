@@ -35,7 +35,13 @@ DEVICE_PACKAGE_OVERLAYS += \
 PRODUCT_ENFORCE_RRO_TARGETS := *
 
 PRODUCT_PACKAGES += \
-    NcmTetheringOverlay
+    NcmTetheringOverlay \
+    CarrierConfigResOverlay \
+    SystemUIResOverlay \
+    FrameworksResOverlay \
+    TelephonyResOverlay \
+    SettingsProviderResOverlay \
+    WifiResOverlay
 
 # Permissions
 PRODUCT_COPY_FILES += \
@@ -377,7 +383,6 @@ PRODUCT_PACKAGES += \
     hostapd \
     libwifi-hal-qcom \
     libwpa_client \
-    WifiOverlay \
     wifi-mac-generator \
     wpa_supplicant \
     wpa_supplicant.conf
