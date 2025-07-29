@@ -40,7 +40,8 @@ PRODUCT_PACKAGE += \
     FrameworksResOverlay \
     TelephonyResOverlay \
     SettingsProviderResOverlay \
-    WifiResOverlay
+    WifiResOverlay \
+    NetworkStackResOverlay
 
 # Permissions
 PRODUCT_COPY_FILES += \

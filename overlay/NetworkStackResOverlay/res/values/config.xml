@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- HTTP URL for network validation, to use for detecting captive portals. -->
+    <!-- default_captive_portal_http_url is not configured as overlayable so
+         OEMs that wish to change captive_portal_http_url configuration must
+         do so via configuring runtime resource overlay to
+         config_captive_portal_http_url and *NOT* by changing or overlaying
+         this resource. It will break if the enforcement of overlayable starts.
+         -->
+    <string name="default_captive_portal_http_url" translatable="false">http://connect.rom.miui.com/generate_204</string>
+    <!-- HTTPS URL for network validation, to use for confirming internet connectivity. -->
+    <!-- default_captive_portal_https_url is not configured as overlayable so
+         OEMs that wish to change captive_portal_https_url configuration must
+         do so via configuring runtime resource overlay to
+         config_captive_portal_https_url and *NOT* by changing or overlaying
+         this resource. It will break if the enforcement of overlayable starts.
+         -->
+    <string name="default_captive_portal_https_url" translatable="false">https://connect.rom.miui.com/generate_204</string>
+
+    <!-- List of fallback URLs to use for detecting captive portals. -->
+    <!-- default_captive_portal_fallback_urls is not configured as overlayable
+         so OEMs that wish to change captive_portal_fallback_urls configuration
+         must do so via configuring runtime resource overlay to
+         config_captive_portal_fallback_urls and *NOT* by changing or overlaying
+         this resource. It will break if the enforcement of overlayable starts.
+         -->
+    <string-array name="default_captive_portal_fallback_urls" translatable="false">
+        <item>http://captive.v2ex.co/generate_204</item>
+        <item>http://connectivitycheck.platform.hicloud.com/generate_204</item>
+    </string-array>
+</resources>
