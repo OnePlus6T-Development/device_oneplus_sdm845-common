@@ -32,6 +32,9 @@ import /vendor/etc/init/hw/init.oem.rc
 import /vendor/etc/init/hw/init.qcom.usb.rc
 import /vendor/etc/init/hw/init.target.rc
 
+on early-fs
+    start vold
+
 on early-init
   # create symlink for vendor mount points
     symlink /vendor/firmware_mnt /firmware
