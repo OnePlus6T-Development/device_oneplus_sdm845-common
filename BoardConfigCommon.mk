@@ -59,6 +59,7 @@ TARGET_KERNEL_ARCH := arm64
 TARGET_KERNEL_CONFIG := vendor/sdm845-perf_defconfig vendor/enchilada.config
 TARGET_KERNEL_NO_GCC := true
 TARGET_KERNEL_SOURCE := kernel/oneplus/sdm845
+TARGET_KERNEL_VERSION := 4.19
 
 # Platform
 BOARD_USES_QCOM_HARDWARE := true
