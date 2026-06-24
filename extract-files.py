@@ -48,6 +48,8 @@ blob_fixups: blob_fixups_user_type = {
         .apktool_patch('blob-patches/PowerOffAlarm.patch'),
     'system_ext/lib64/lib-imsvideocodec.so': blob_fixup()
         .add_needed('libgui_shim.so'),
+    'system_ext/lib64/libwfdservice.so': blob_fixup()
+        .replace_needed('android.media.audio.common.types-V4-cpp.so', 'android.media.audio.common.types-V5-cpp.so'),
     'system_ext/lib64/libwfdnative.so': blob_fixup()
         .add_needed('libinput_shim.so'),
     'vendor/lib/libVDBlurlessAPI_v2.so': blob_fixup()
