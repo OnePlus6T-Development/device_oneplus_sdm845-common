@@ -2,6 +2,26 @@ soong_namespace {
     imports: ["hardware/oneplus"],
 }
 
+uwu_kernel {
+    name: "kernel",
+    kernel_dir: "kernel/oneplus/sdm845",
+    kernel_arch: "arm64",
+    image_name: "Image.gz-dtb",
+    clang_version: "clang-r563880c",
+
+    config: {
+        defconfig: "vendor/sdm845-perf_defconfig",
+        fragments: ["vendor/enchilada.config"],
+    },
+
+    dtbo: {
+        enabled: true,
+        target: "dtbs",
+        image_name: "dtbo.img",
+        page_size: 4096,
+    },
+}
+
 install_symlink {
     name: "firmware_wlan_mac.bin_symlink",
     vendor: true,
